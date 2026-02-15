@@ -7,10 +7,10 @@ from app.event_monitor import monitor_events
 
 
 def main():
-    print("BOT TOKEN PREFIX:", BOT_TOKEN[:10])
-
     application = ApplicationBuilder().token(BOT_TOKEN).build()
+
     print("JOB QUEUE:", application.job_queue)
+
     sheets = SheetsClient()
 
     application.job_queue.run_repeating(
@@ -20,4 +20,10 @@ def main():
     )
 
     print("Bot started...")
-    application.run_polling()
+    application.initialize()
+    application.start()
+    print("Polling NOT started")
+
+
+if __name__ == "__main__":
+    main()
