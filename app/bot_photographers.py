@@ -1,6 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
@@ -10,8 +11,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     sheets = context.bot_data.get("sheets")
 
-    # Получаем всех фотографов
-    rows = sheets.sheet_photographers.get_all_records()
+    # Получаем значения листа
+    values = sheets.sheet_photographers.get_all_values()
+
+    if len(values) <= 1:
+        rows = []
+    else:
+        rows = sheets.sheet_photographers.get_all_records()
 
     exists = any(str(r["Telegram ID"]) == str(tg_id) for r in rows)
 
@@ -20,7 +26,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tg_id,
             name,
             username,
-            0,   # Время рассылки (по умолчанию 0)
+            0,   # Время рассылки
             0,   # Принял
             0,   # Отменил
             0    # Просрочил
@@ -29,7 +35,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Вы зарегистрированы в системе.")
     else:
         await update.message.reply_text("Вы уже зарегистрированы.")
-        
+
 
 def register_handlers(application):
     application.add_handler(CommandHandler("start", start))
