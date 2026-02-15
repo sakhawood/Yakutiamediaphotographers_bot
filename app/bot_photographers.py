@@ -121,9 +121,15 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         ])
 
-    await update.message.reply_text(
-        "Ваши заказы:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+    if update.message:
+        await update.message.reply_text(
+            "Ваши заказы:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    else:
+        await update.effective_chat.send_message(
+            "Ваши заказы:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 async def open_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
