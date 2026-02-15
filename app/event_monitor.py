@@ -64,7 +64,7 @@ async def monitor_events(application, sheets):
         await asyncio.sleep(5)
 
 
-async def start_distribution(application, sheets, event_id):
+async def start_distribution(application, sheets, event_id, required_count):
 
     print(f"Distributing event {event_id}", flush=True)
 
