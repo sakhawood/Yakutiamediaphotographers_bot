@@ -215,17 +215,22 @@ def register_handlers(application):
 
     application.add_handler(
         MessageHandler(
-            filters.TEXT & filters.Regex("Заказы|заказы"),
-            my_orders
+            filters.TEXT,
+            route_text_buttons
         )
     )
+async def route_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    application.add_handler(
-        MessageHandler(
-            filters.TEXT & filters.Regex("Выключить бота|Включить бота"),
-            toggle_status
-        )
-    )
+    text = update.message.text
+
+    print("TEXT RECEIVED:", text, flush=True)
+
+    if "заказы" in text.lower():
+        await my_orders(update, context)
+
+    elif "выключить" in text.lower() or "включить" in text.lower():
+        await toggle_status(update, context)
+
 
     application.add_handler(
         CallbackQueryHandler(open_order, pattern="^order_")
