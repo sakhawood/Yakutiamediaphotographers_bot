@@ -7,11 +7,6 @@ PROCESSED_EVENTS = set()
 
 async def monitor_events(context):
     sheets = context.job.data["sheets"]
-    """
-    Проверяет лист СОБЫТИЯ.
-    Ищет события со статусом 'в работу'
-    и запускает распределение.
-    """
 
     try:
         print("=== MONITOR START ===", flush=True)
@@ -19,7 +14,7 @@ async def monitor_events(context):
         records = sheets.sheet_events.get_all_records()
         print("Total rows:", len(records), flush=True)
 
-        for row in records:
+        for idx, row in enumerate(records, start=2):
 
             print("ROW:", row, flush=True)
 
@@ -34,25 +29,23 @@ async def monitor_events(context):
                 flush=True
             )
 
-            # Условия запуска
             distributed = row.get("Распределение запущено")
 
             if (
                 status == "в работу"
-                 and photographers_needed
-                 and duration
-                 and not distributed
+                and photographers_needed
+                and duration
+                and not distributed
             ):
 
                 print(f"Start distribution for event {event_id}", flush=True)
 
-                row_index = records.index(row) + 2  # +2 из-за заголовка
-                sheets.sheet_events.update_cell(row_index, 15, 1)  # 15 — номер колонки
+                sheets.sheet_events.update_cell(idx, 15, 1)
 
                 PROCESSED_EVENTS.add(event_id)
 
                 await start_distribution(
-                    application,
+                    context.application,
                     sheets,
                     event_id,
                     int(photographers_needed)
@@ -81,6 +74,9 @@ async def start_distribution(application, sheets, event_id, required_count):
     for photographer in active_photographers:
 
         tg_id = photographer.get("Telegram ID")
+
+        if not tg_id:
+            continue
 
         keyboard = [
             [
