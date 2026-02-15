@@ -92,32 +92,94 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_id = update.effective_user.id
     sheets = context.bot_data["sheets"]
 
-    values = sheets.sheet_assignments.get_all_values()
-
-    if len(values) <= 1:
-        await update.message.reply_text("У вас пока нет назначений.")
-        return
-
     rows = sheets.sheet_assignments.get_all_records()
 
-    my_events = [
+    my_rows = [
         r for r in rows
-        if str(r.get("Telegram ID")) == str(tg_id)
+        if str(r["Telegram ID"]) == str(tg_id)
+        and r["Статус"] == "принял"
     ]
 
-    if not my_events:
-        await update.message.reply_text("У вас пока нет назначений.")
+    if not my_rows:
+        await update.message.reply_text("У вас нет активных заказов.")
         return
 
-    text = "📂 Ваши заказы:\n\n"
+    keyboard = []
 
-    for r in my_events:
-        text += (
-            f"ID: {r.get('ID события')}\n"
-            f"Статус: {r.get('Статус')}\n\n"
-        )
+    for r in my_rows:
+        event_id = r["ID события"]
+        keyboard.append([
+            InlineKeyboardButton(
+                f"{event_id} — принял",
+                callback_data=f"order_{event_id}"
+            )
+        ])
 
-    await update.message.reply_text(text)
+    await update.message.reply_text(
+        "Ваши заказы:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+async def open_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    query = update.callback_query
+    await query.answer()
+
+    event_id = query.data.split("_")[1]
+
+    sheets = context.bot_data["sheets"]
+
+    rows = sheets.sheet_events.get_all_records()
+
+    event = next(
+        (r for r in rows if str(r["ID"]) == str(event_id)),
+        None
+    )
+
+    if not event:
+        await query.edit_message_text("Событие не найдено.")
+        return
+
+    text = (
+        f"Мероприятие: {event_id}\n"
+        f"Дата: {event['Дата мероприятия']}\n"
+        f"Время: {event['Время начала']}\n"
+        f"Место: {event['Место проведения']}\n"
+    )
+
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "📤 Отправить ссылку",
+                callback_data=f"upload_{event_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "❌ Отменить участие",
+                callback_data=f"cancel_{event_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🔙 Назад",
+                callback_data="back_orders"
+            )
+        ]
+    ]
+
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+async def back_to_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    # Переиспользуем my_orders
+    update._effective_message = query.message
+    await my_orders(update, context)
 
 async def handle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -153,18 +215,26 @@ def register_handlers(application):
 
     application.add_handler(
         MessageHandler(
-            filters.TEXT & filters.Regex("Выключить бота|Включить бота"),
-            toggle_status
-        )
-    )
-
-    application.add_handler(
-        MessageHandler(
             filters.TEXT & filters.Regex("Мои заказы"),
             my_orders
         )
     )
 
     application.add_handler(
-        CallbackQueryHandler(handle_accept, pattern="^accept_")
+        MessageHandler(
+            filters.TEXT & filters.Regex("Выключить бота|Включить бота"),
+            toggle_status
+        )
     )
+
+    application.add_handler(
+        CallbackQueryHandler(open_order, pattern="^order_")
+    )
+
+    application.add_handler(
+        CallbackQueryHandler(back_to_orders, pattern="^back_orders")
+    )
+
+    application.add_handler(
+        CallbackQueryHandler(handle_accept, pattern="^accept_")
+    )        
