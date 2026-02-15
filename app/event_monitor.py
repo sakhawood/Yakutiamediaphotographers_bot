@@ -1,22 +1,54 @@
 import asyncio
-from app.config import CHECK_INTERVAL
 
-processed_events = set()
+# кэш обработанных событий (в памяти контейнера)
+PROCESSED_EVENTS = set()
 
-async def monitor_events(app, sheets):
 
-    while True:
+async def monitor_events(application, sheets):
+    """
+    Проверяет лист СОБЫТИЯ раз в 60 секунд.
+    Находит события со статусом 'в работу'
+    и запускает распределение.
+    """
 
-        events = sheets.get_active_events()
+    try:
+        print("Monitoring events...")
 
-        for event in events:
-            event_id = event["ID"]
+        # 1️⃣ Получить все строки (один запрос к Sheets)
+        records = sheets.sheet_events.get_all_records()
 
-            if event_id not in processed_events:
-                processed_events.add(event_id)
+        for row in records:
 
-                app.create_task(
-                    app.distributor.start_distribution(event)
-                )
+            event_id = str(row.get("ID")).strip()
+            status = str(row.get("Статус")).strip()
+            photographers_needed = row.get("Количество фотографов")
+            duration = row.get("Продолжительность")
 
-        await asyncio.sleep(CHECK_INTERVAL)
+            # 2️⃣ Проверка условий запуска
+            if (
+                status == "в работу"
+                and photographers_needed
+                and duration
+                and event_id not in PROCESSED_EVENTS
+            ):
+
+                print(f"Start distribution for event {event_id}")
+
+                # 3️⃣ Добавляем в кэш, чтобы не запускать повторно
+                PROCESSED_EVENTS.add(event_id)
+
+                # 4️⃣ Запускаем распределение
+                await start_distribution(application, sheets, event_id)
+
+        print("Monitoring complete")
+
+    except Exception as e:
+        print("Error in monitor_events:", e)
+        await asyncio.sleep(5)
+
+async def start_distribution(application, sheets, event_id):
+    """
+    Заглушка запуска распределения.
+    Здесь позже будет логика рассылки.
+    """
+    print(f"Distributing event {event_id}")
