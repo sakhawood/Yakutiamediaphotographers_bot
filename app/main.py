@@ -1,4 +1,6 @@
-print("MAIN FILE LOADED")
+import sys
+print("MAIN FILE LOADED", flush=True)
+sys.stdout.flush()
 
 from telegram.ext import ApplicationBuilder
 from app.config import BOT_TOKEN
@@ -7,6 +9,8 @@ from app.event_monitor import monitor_events
 
 
 def main():
+    print("ENTERING MAIN", flush=True)
+
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
     print("JOB QUEUE:", application.job_queue)
