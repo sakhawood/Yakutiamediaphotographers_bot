@@ -5,7 +5,8 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 PROCESSED_EVENTS = set()
 
 
-async def monitor_events(application, sheets):
+async def monitor_events(context):
+    sheets = context.job.data["sheets"]
     """
     Проверяет лист СОБЫТИЯ.
     Ищет события со статусом 'в работу'
