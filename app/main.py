@@ -1,6 +1,3 @@
-import sys
-sys.stdout.flush()
-
 from telegram.ext import ApplicationBuilder
 from app.config import BOT_TOKEN
 from app.sheets import SheetsClient
@@ -12,7 +9,7 @@ def main():
 
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    print("JOB QUEUE:", application.job_queue)
+    print("JOB QUEUE:", application.job_queue, flush=True)
 
     sheets = SheetsClient()
 
@@ -22,9 +19,9 @@ def main():
         first=10,
     )
 
-    application.run_polling()
+    print("Bot started...", flush=True)
 
-    print("Polling NOT started")
+    application.run_polling()
 
 
 if __name__ == "__main__":
