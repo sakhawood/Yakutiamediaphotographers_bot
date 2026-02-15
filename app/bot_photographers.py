@@ -222,7 +222,6 @@ def register_handlers(application):
 async def route_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text
-
     print("TEXT RECEIVED:", text, flush=True)
 
     if "заказы" in text.lower():
@@ -231,6 +230,17 @@ async def route_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE)
     elif "выключить" in text.lower() or "включить" in text.lower():
         await toggle_status(update, context)
 
+
+def register_handlers(application):
+
+    application.add_handler(CommandHandler("start", start))
+
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT,
+            route_text_buttons
+        )
+    )
 
     application.add_handler(
         CallbackQueryHandler(open_order, pattern="^order_")
@@ -242,4 +252,4 @@ async def route_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     application.add_handler(
         CallbackQueryHandler(handle_accept, pattern="^accept_")
-    )        
+    )
