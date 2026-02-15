@@ -1,28 +1,28 @@
-import asyncio
 from telegram.ext import ApplicationBuilder
-from app.config import BOT_TOKEN
-from app.sheets import SheetsClient
-from app.event_monitor import monitor_events
-from app.distributor import try_accept_event
+from config import BOT_TOKEN
+from sheets import SheetsClient
+from event_monitor import monitor_events
 
-class AppContext:
-    def __init__(self, application, sheets):
-        self.application = application
-        self.sheets = sheets
 
-async def main():
-
+def main():
+    # 1️⃣ Создаем приложение
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    # 2️⃣ Инициализация Google Sheets (один раз)
     sheets = SheetsClient()
 
-    ctx = AppContext(application, sheets)
-
-    application.create_task(
-        monitor_events(ctx, sheets)
+    # 3️⃣ Планировщик проверки событий (раз в 60 секунд)
+    application.job_queue.run_repeating(
+        lambda context: monitor_events(application, sheets),
+        interval=60,
+        first=10,
     )
 
-    await application.run_polling()
+    print("Bot started...")
+    
+    # 4️⃣ Запуск polling
+    application.run_polling()
+
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
