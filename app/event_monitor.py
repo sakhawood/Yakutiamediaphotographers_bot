@@ -59,46 +59,34 @@ async def monitor_events(application, sheets):
         await asyncio.sleep(5)
 
 
-async def start_distribution(application, sheets, event_id, required_count):
-    """
-    Отправляет уведомление фотографам.
-    """
+async def start_distribution(application, sheets, event_id):
 
     print(f"Distributing event {event_id}", flush=True)
 
     photographers = sheets.sheet_photographers.get_all_records()
 
-    print("PHOTOGRAPHERS:", photographers, flush=True)
+    active_photographers = [
+        p for p in photographers
+        if str(p.get("Активен", "1")).strip() == "1"
+    ]
 
-    if not photographers:
-        print("No photographers found", flush=True)
-        return
+    print("Active photographers:", len(active_photographers), flush=True)
 
-    for p in photographers:
+    for photographer in active_photographers:
 
-        try:
-            tg_id = int(p["Telegram ID"])
+        tg_id = photographer.get("Telegram ID")
 
-            print("SENDING TO:", tg_id, flush=True)
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "Принять",
+                    callback_data=f"accept_{event_id}"
+                )
+            ]
+        ]
 
-            keyboard = InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton(
-                        "✅ Принять",
-                        callback_data=f"accept_{event_id}"
-                    )
-                ]
-            ])
-
-            await application.bot.send_message(
-                chat_id=tg_id,
-                text=(
-                    f"Новое мероприятие\n\n"
-                    f"ID: {event_id}\n"
-                    f"Требуется фотографов: {required_count}"
-                ),
-                reply_markup=keyboard
-            )
-
-        except Exception as e:
-            print("Error sending to photographer:", e, flush=True)
+        await application.bot.send_message(
+            chat_id=tg_id,
+            text=f"Новое мероприятие {event_id}",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
