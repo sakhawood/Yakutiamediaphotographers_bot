@@ -1,3 +1,5 @@
+    print("MAIN FILE LOADED")
+
 from telegram.ext import ApplicationBuilder
 from app.config import BOT_TOKEN
 from app.sheets import SheetsClient
