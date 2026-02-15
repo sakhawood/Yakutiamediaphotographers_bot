@@ -106,6 +106,7 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not my_rows:
         await update.message.reply_text("У вас нет назначений.")
         return
+    print("INLINE SENT", flush=True)
 
 async def open_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
