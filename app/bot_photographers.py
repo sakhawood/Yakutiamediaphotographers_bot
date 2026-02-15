@@ -87,7 +87,7 @@ async def show_main_menu(update, context, status):
         )
     )
 
-aasync def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     print("MY ORDERS CLICKED", flush=True)
 
