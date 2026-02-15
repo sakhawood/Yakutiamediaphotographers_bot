@@ -15,7 +15,7 @@ def main():
         first=10,
     )
 
-    print(application.job_queue)
+    print("BOT TOKEN PREFIX:", BOT_TOKEN[:10])
 
     application.run_polling()
 
