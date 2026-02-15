@@ -120,6 +120,7 @@ def register_handlers(application):
                 filters.Regex("⛔ Выключить бота") |
                 filters.Regex("▶ Включить бота")
             ),
+print("TOGGLE CLICKED", flush=True)
             toggle_status
         )
     )
