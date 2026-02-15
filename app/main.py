@@ -20,8 +20,8 @@ def main():
     )
 
     print("Bot started...")
-    application.initialize()
-    application.start()
+    application.run_polling()
+
     print("Polling NOT started")
 
 
