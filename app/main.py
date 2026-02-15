@@ -2,12 +2,18 @@ from telegram.ext import ApplicationBuilder
 from app.config import BOT_TOKEN
 from app.sheets import SheetsClient
 from app.event_monitor import monitor_events
+from app.bot_photographers import register_handlers
 
 
 def main():
     print("ENTERING MAIN", flush=True)
 
     application = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    sheets = SheetsClient()
+    application.bot_data["sheets"] = sheets
+
+    register_handlers(application)
 
     print("JOB QUEUE:", application.job_queue, flush=True)
 

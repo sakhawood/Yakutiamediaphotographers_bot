@@ -1,122 +1,35 @@
-import os
-import json
-import asyncio
-from datetime import datetime, timedelta
-
-import gspread
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters,
-)
-
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.interval import IntervalTrigger
-
-
-# =============================
-# ENV VARIABLES
-# =============================
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")
-
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN not set")
-
-if not GOOGLE_CREDENTIALS:
-    raise ValueError("GOOGLE_CREDENTIALS not set")
-
-
-# =============================
-# GOOGLE SHEETS
-# =============================
-
-creds_dict = json.loads(GOOGLE_CREDENTIALS)
-gc = gspread.service_account_from_dict(creds_dict)
-
-# Книга заявок
-orders_book = gc.open("Order_Yakutia.media")
-orders_sheet = orders_book.sheet1
-
-# Книга фотографов
-photographers_book = gc.open("Фотографы")
-photographers_sheet = photographers_book.sheet1
-
-# Лист назначений
-assignments_sheet = photographers_book.worksheet("Назначения")
-
-
-# =============================
-# TELEGRAM MENU
-# =============================
-
-MAIN_KEYBOARD = [
-    ["📅 Мероприятия сегодня"],
-    ["📆 Мероприятия завтра"],
-    ["📂 Мои заказы"]
-]
-
-
-# =============================
-# START
-# =============================
+from telegram import Update
+from telegram.ext import ContextTypes, CommandHandler
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Бот фотографов Yakutia.media",
-        reply_markup=ReplyKeyboardMarkup(MAIN_KEYBOARD, resize_keyboard=True)
-    )
+    user = update.effective_user
 
+    tg_id = user.id
+    name = user.first_name or ""
+    username = user.username or ""
 
-# =============================
-# CHECK NEW ORDERS
-# =============================
+    sheets = context.bot_data.get("sheets")
 
-async def check_orders(context: ContextTypes.DEFAULT_TYPE):
-    """
-    Проверяет заявки со статусом 'в работу'
-    """
+    # Получаем всех фотографов
+    rows = sheets.sheet_photographers.get_all_records()
 
-    print("Проверка заявок:", datetime.now())
+    exists = any(str(r["Telegram ID"]) == str(tg_id) for r in rows)
 
-    rows = orders_sheet.get_all_records()
+    if not exists:
+        sheets.sheet_photographers.append_row([
+            tg_id,
+            name,
+            username,
+            0,   # Время рассылки (по умолчанию 0)
+            0,   # Принял
+            0,   # Отменил
+            0    # Просрочил
+        ])
 
-    for row in rows:
-        if row.get("status") == "в работу":
-            event_id = row.get("id")
+        await update.message.reply_text("Вы зарегистрированы в системе.")
+    else:
+        await update.message.reply_text("Вы уже зарегистрированы.")
+        
 
-            # TODO:
-            # Проверить сколько уже приняло
-            # Если меньше лимита — запускать волну рассылки
-            print("Найдена активная заявка:", event_id)
-
-
-# =============================
-# MAIN
-# =============================
-
-def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-
-    # Scheduler
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(
-        check_orders,
-        trigger=IntervalTrigger(minutes=1),
-        args=[app]
-    )
-    scheduler.start()
-
-    print("Бот фотографов запущен")
-
-    app.run_polling()
-
-
-if __name__ == "__main__":
-    main()
+def register_handlers(application):
+    application.add_handler(CommandHandler("start", start))
