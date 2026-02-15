@@ -87,6 +87,38 @@ async def show_main_menu(update, context, status):
         )
     )
 
+async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    tg_id = update.effective_user.id
+    sheets = context.bot_data["sheets"]
+
+    values = sheets.sheet_assignments.get_all_values()
+
+    if len(values) <= 1:
+        await update.message.reply_text("У вас пока нет назначений.")
+        return
+
+    rows = sheets.sheet_assignments.get_all_records()
+
+    my_events = [
+        r for r in rows
+        if str(r.get("Telegram ID")) == str(tg_id)
+    ]
+
+    if not my_events:
+        await update.message.reply_text("У вас пока нет назначений.")
+        return
+
+    text = "📂 Ваши заказы:\n\n"
+
+    for r in my_events:
+        text += (
+            f"ID: {r.get('ID события')}\n"
+            f"Статус: {r.get('Статус')}\n\n"
+        )
+
+    await update.message.reply_text(text)
+
 async def handle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -123,6 +155,13 @@ def register_handlers(application):
         MessageHandler(
             filters.TEXT & filters.Regex("Выключить бота|Включить бота"),
             toggle_status
+        )
+    )
+
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & filters.Regex("Мои заказы"),
+            my_orders
         )
     )
 
