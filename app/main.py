@@ -1,5 +1,4 @@
 import sys
-print("MAIN FILE LOADED", flush=True)
 sys.stdout.flush()
 
 from telegram.ext import ApplicationBuilder
@@ -23,7 +22,6 @@ def main():
         first=10,
     )
 
-    print("Bot started...")
     application.run_polling()
 
     print("Polling NOT started")

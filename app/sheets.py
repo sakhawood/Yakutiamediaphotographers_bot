@@ -2,8 +2,6 @@ import gspread
 from google.oauth2.service_account import Credentials
 from app.config import GOOGLE_CREDENTIALS
 
-print("AUTH OK", flush=True)
-
 class SheetsClient:
 
     def __init__(self):
