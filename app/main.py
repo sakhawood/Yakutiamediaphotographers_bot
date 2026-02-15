@@ -21,10 +21,12 @@ def main():
     register_handlers(application)
 
     application.job_queue.run_repeating(
-        lambda context: monitor_events(application, sheets),
-        interval=60,
-        first=10,
-    )
+    monitor_events,
+    interval=60,
+    first=10,
+    name="event_monitor",
+    max_instances=1,
+)
 
     print("Bot started...", flush=True)
 
