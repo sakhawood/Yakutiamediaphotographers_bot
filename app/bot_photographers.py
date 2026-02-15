@@ -94,31 +94,18 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     rows = sheets.sheet_assignments.get_all_records()
 
+    print("ASSIGNMENTS:", rows, flush=True)
+
     my_rows = [
         r for r in rows
-        if str(r["Telegram ID"]) == str(tg_id)
-        and r["Статус"] == "принял"
+        if str(r.get("Telegram ID")) == str(tg_id)
     ]
 
+    print("MY_ROWS:", my_rows, flush=True)
+
     if not my_rows:
-        await update.message.reply_text("У вас нет активных заказов.")
+        await update.message.reply_text("У вас нет назначений.")
         return
-
-    keyboard = []
-
-    for r in my_rows:
-        event_id = r["ID события"]
-        keyboard.append([
-            InlineKeyboardButton(
-                f"{event_id} — принял",
-                callback_data=f"order_{event_id}"
-            )
-        ])
-
-    await update.message.reply_text(
-        "Ваши заказы:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
 
 async def open_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
