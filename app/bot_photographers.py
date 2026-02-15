@@ -116,7 +116,10 @@ def register_handlers(application):
 
     application.add_handler(
         MessageHandler(
-            filters.TEXT & filters.Regex("Выключить|Включить"),
+            filters.TEXT & (
+                filters.Regex("⛔ Выключить бота") |
+                filters.Regex("▶ Включить бота")
+            ),
             toggle_status
         )
     )
