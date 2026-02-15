@@ -34,14 +34,19 @@ async def monitor_events(application, sheets):
             )
 
             # Условия запуска
+            distributed = row.get("Распределение запущено")
+
             if (
                 status == "в работу"
-                and photographers_needed
-                and duration
-                and event_id not in PROCESSED_EVENTS
+                 and photographers_needed
+                 and duration
+                 and not distributed
             ):
 
                 print(f"Start distribution for event {event_id}", flush=True)
+
+                row_index = records.index(row) + 2  # +2 из-за заголовка
+                sheets.sheet_events.update_cell(row_index, 15, 1)  # 15 — номер колонки
 
                 PROCESSED_EVENTS.add(event_id)
 
