@@ -215,7 +215,7 @@ def register_handlers(application):
 
     application.add_handler(
         MessageHandler(
-            filters.TEXT & filters.Regex("Мои заказы"),
+            filters.TEXT & filters.Regex("Заказы|заказы"),
             my_orders
         )
     )
