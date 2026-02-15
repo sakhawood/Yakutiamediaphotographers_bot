@@ -121,15 +121,9 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         ])
 
-    if update.message:
-        await update.message.reply_text(
-            "Ваши заказы:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-    else:
-        await update.effective_chat.send_message(
-            "Ваши заказы:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(
+        "Ваши заказы:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 async def open_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -249,8 +243,15 @@ def register_handlers(application):
 
     application.add_handler(
         MessageHandler(
-            filters.TEXT,
-            route_text_buttons
+            filters.TEXT & filters.Regex("Мои заказы"),
+            my_orders
+        )
+    )
+
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & filters.Regex("Выключить бота|Включить бота"),
+            toggle_status
         )
     )
 
