@@ -7,7 +7,10 @@ class SheetsClient:
     def __init__(self):
         creds = Credentials.from_service_account_info(
             GOOGLE_CREDENTIALS,
-            scopes=["https://www.googleapis.com/auth/spreadsheets"]
+            scopes=[
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive"
+            ]
         )
         self.gc = gspread.authorize(creds)
 
