@@ -10,14 +10,15 @@ def main():
 
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    print("JOB QUEUE:", application.job_queue)
+
     sheets = SheetsClient()
+
+    # 👇 ВАЖНО: передаем sheets во все handlers
     application.bot_data["sheets"] = sheets
 
+    # 👇 регистрируем команды и callbacks
     register_handlers(application)
-
-    print("JOB QUEUE:", application.job_queue, flush=True)
-
-    sheets = SheetsClient()
 
     application.job_queue.run_repeating(
         lambda context: monitor_events(application, sheets),
