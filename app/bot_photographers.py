@@ -32,7 +32,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
         status = 1
     else:
-        status = int(photographer.get("Активен", 1))
+        raw_status = photographer.get("Активен", 1)
+
+    if str(raw_status).strip() == "":
+        status = 1
+    else:
+        status = int(raw_status)
 
     await show_main_menu(update, context, status)
 
