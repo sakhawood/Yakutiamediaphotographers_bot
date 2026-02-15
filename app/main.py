@@ -27,7 +27,6 @@ def main():
     name="event_monitor",
     job_kwargs={"max_instances": 1},
     )
-)
 
     print("Bot started...", flush=True)
 
