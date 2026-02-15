@@ -15,7 +15,7 @@ def main():
         first=10,
     )
 
-    print("Bot started...")
+    print(application.job_queue)
 
     application.run_polling()
 
