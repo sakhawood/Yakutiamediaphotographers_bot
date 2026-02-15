@@ -1,4 +1,4 @@
-    print("MAIN FILE LOADED")
+print("MAIN FILE LOADED")
 
 from telegram.ext import ApplicationBuilder
 from app.config import BOT_TOKEN
