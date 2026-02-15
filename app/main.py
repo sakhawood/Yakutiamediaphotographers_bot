@@ -10,6 +10,7 @@ def main():
     print("BOT TOKEN PREFIX:", BOT_TOKEN[:10])
 
     application = ApplicationBuilder().token(BOT_TOKEN).build()
+    print("JOB QUEUE:", application.job_queue)
     sheets = SheetsClient()
 
     application.job_queue.run_repeating(
