@@ -9,7 +9,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = update.effective_user
     tg_id = user.id
-
     sheets = context.bot_data["sheets"]
 
     rows = sheets.sheet_photographers.get_all_records()
@@ -34,14 +33,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         raw_status = photographer.get("Активен", 1)
 
-    if str(raw_status).strip() == "":
-        status = 1
-    else:
-        status = int(raw_status)
+        if str(raw_status).strip() == "":
+            status = 1
+        else:
+            status = int(raw_status)
 
     await show_main_menu(update, context, status)
 
 async def toggle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    print("TOGGLE CLICKED", flush=True)
 
     tg_id = update.effective_user.id
     sheets = context.bot_data["sheets"]
@@ -52,10 +53,12 @@ async def toggle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if str(row[0]) == str(tg_id):
 
-            current_status = int(row[7])
+            current_status = int(row[7] or 0)
             new_status = 0 if current_status == 1 else 1
 
             sheets.sheet_photographers.update_cell(idx, 8, new_status)
+
+            print("STATUS UPDATED TO:", new_status, flush=True)
 
             await show_main_menu(update, context, new_status)
             return
@@ -73,6 +76,8 @@ async def show_main_menu(update, context, status):
         ["📂 Мои заказы"],
         [toggle_text]
     ]
+
+    print("MENU BUILT", flush=True)
 
     await update.message.reply_text(
         status_text,
@@ -116,11 +121,7 @@ def register_handlers(application):
 
     application.add_handler(
         MessageHandler(
-            filters.TEXT & (
-                filters.Regex("⛔ Выключить бота") |
-                filters.Regex("▶ Включить бота")
-            ),
-print("TOGGLE CLICKED", flush=True)
+            filters.TEXT & filters.Regex("Выключить бота|Включить бота"),
             toggle_status
         )
     )
