@@ -88,14 +88,12 @@ async def show_main_menu(update, context, status):
     )
 
 async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     print("MY ORDERS CLICKED", flush=True)
 
-    tg_id = update.effective_user.id
     sheets = context.bot_data["sheets"]
+    tg_id = update.effective_user.id
 
     rows = sheets.sheet_assignments.get_all_records()
-
     print("ASSIGNMENTS:", rows, flush=True)
 
     my_rows = [
@@ -106,8 +104,16 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     print("MY_ROWS:", my_rows, flush=True)
 
+    # Определяем источник сообщения
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        message = query.message
+    else:
+        message = update.message
+
     if not my_rows:
-        await update.message.reply_text("У вас нет активных заказов.")
+        await message.reply_text("У вас нет активных заказов.")
         return
 
     keyboard = []
@@ -121,7 +127,7 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         ])
 
-    await update.message.reply_text(
+    await message.reply_text(
         "Ваши заказы:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
@@ -180,11 +186,6 @@ async def open_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def back_to_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    # Переиспользуем my_orders
-    update._effective_message = query.message
     await my_orders(update, context)
 
 async def handle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
