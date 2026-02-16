@@ -83,10 +83,9 @@ async def start_distribution(application, sheets, event_id):
             print("EVENT NOT FOUND", flush=True)
             return
 
-        # Количество требуемых фотографов
         try:
             required_count = int(event.get("Количество фотографов") or 0)
-        except ValueError:
+        except:
             required_count = 0
 
         if required_count <= 0:
@@ -113,7 +112,7 @@ async def start_distribution(application, sheets, event_id):
 
         active_photographers = [
             p for p in photographers
-            if str(p.get("Активен", "1")).strip() == "1"
+            if str(p.get("Активен", "")).strip() == "1"
         ]
 
         print("Active photographers:", len(active_photographers), flush=True)
@@ -122,18 +121,23 @@ async def start_distribution(application, sheets, event_id):
             print("NO ACTIVE PHOTOGRAPHERS", flush=True)
             return
 
-        # --- 4. Загружаем уведомления один раз ---
+        # --- 4. Загружаем уведомления ---
         notifications = sheets.sheet_notifications.get_all_records()
 
         # --- 5. Рассылка ---
         for photographer in active_photographers:
 
-            tg_id = photographer.get("Telegram ID")
+            tg_id_raw = photographer.get("Telegram ID")
 
-            if not tg_id:
+            if not tg_id_raw:
                 continue
 
-            # Проверка: уже отправляли?
+            try:
+                tg_id = int(str(tg_id_raw).split(".")[0])
+            except:
+                print("INVALID TG ID:", tg_id_raw, flush=True)
+                continue
+
             already_sent = any(
                 str(n.get("ID события")) == str(event_id)
                 and str(n.get("Telegram ID")) == str(tg_id)
@@ -155,7 +159,7 @@ async def start_distribution(application, sheets, event_id):
             ]
 
             try:
-                await application.bot.send_message(
+                msg = await application.bot.send_message(
                     chat_id=tg_id,
                     text=(
                         f"📌 Новое мероприятие\n\n"
@@ -167,7 +171,8 @@ async def start_distribution(application, sheets, event_id):
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
 
-                # Фиксируем отправку
+                print("SENT OK:", msg.message_id, flush=True)
+
                 sheets.sheet_notifications.append_row([
                     event_id,
                     tg_id,
@@ -175,9 +180,9 @@ async def start_distribution(application, sheets, event_id):
                 ])
 
             except Exception as e:
-                print("SEND ERROR:", e, flush=True)
+                print("SEND ERROR:", repr(e), flush=True)
 
         print("DISTRIBUTION FINISHED", flush=True)
 
     except Exception as e:
-        print("DISTRIBUTION ERROR:", e, flush=True)
+        print("DISTRIBUTION ERROR:", repr(e), flush=True)
