@@ -65,7 +65,7 @@ async def monitor_events(context):
         print("Error in monitor_events:", repr(e), flush=True)
         await asyncio.sleep(5)
 
-"SENDING TO:", tg_id, flush=True)
+        print("SENDING TO:", tg_id, flush=True)
 
             keyboard = [
                 [
