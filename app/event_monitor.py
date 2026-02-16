@@ -65,7 +65,95 @@ async def monitor_events(context):
         print("Error in monitor_events:", repr(e), flush=True)
         await asyncio.sleep(5)
 
-        print("SENDING TO:", tg_id, flush=True)
+async def start_distribution(application, sheets, event_id):
+
+    print(f"Distributing event {event_id}", flush=True)
+
+    try:
+        # 1. Получаем событие
+        events = sheets.sheet_events.get_all_records()
+
+        event = next(
+            (e for e in events if str(e.get("ID")) == str(event_id)),
+            None
+        )
+
+        if not event:
+            print("EVENT NOT FOUND", flush=True)
+            return
+
+        required_count = int(event.get("Количество фотографов") or 0)
+
+        if required_count <= 0:
+            print("INVALID REQUIRED COUNT", flush=True)
+            return
+
+        # 2. Проверяем текущие назначения
+        assignments = sheets.sheet_assignments.get_all_records()
+
+        current_accepts = [
+            a for a in assignments
+            if str(a.get("ID события")) == str(event_id)
+            and a.get("Статус") == "принял"
+        ]
+
+        print("CURRENT ACCEPTS:", len(current_accepts), flush=True)
+
+        if len(current_accepts) >= required_count:
+            print("ALREADY FULL", flush=True)
+            return
+
+        # 3. Получаем активных фотографов
+        photographers = sheets.sheet_photographers.get_all_records()
+
+        active_photographers = [
+            p for p in photographers
+            if str(p.get("Активен", "")).strip() == "1"
+        ]
+
+        print("Active photographers:", len(active_photographers), flush=True)
+
+        if not active_photographers:
+            print("NO ACTIVE PHOTOGRAPHERS", flush=True)
+            return
+
+        # 4. Загружаем уведомления
+        notifications_raw = sheets.sheet_notifications.get_all_values()
+
+        if len(notifications_raw) <= 1:
+            notifications = []
+        else:
+            headers = notifications_raw[0]
+            notifications = [
+                dict(zip(headers, row))
+                for row in notifications_raw[1:]
+                if len(row) == len(headers)
+            ]
+
+        # 5. Рассылка
+        for photographer in active_photographers:
+
+            tg_id_raw = photographer.get("Telegram ID")
+
+            if not tg_id_raw:
+                continue
+
+            try:
+                tg_id = int(str(tg_id_raw).split(".")[0])
+            except:
+                print("INVALID TG ID:", tg_id_raw, flush=True)
+                continue
+
+            already_sent = any(
+                str(n.get("ID события")) == str(event_id)
+                and str(n.get("Telegram ID")) == str(tg_id)
+                for n in notifications
+            )
+
+            if already_sent:
+                continue
+
+            print("SENDING TO:", tg_id, flush=True)
 
             keyboard = [
                 [
