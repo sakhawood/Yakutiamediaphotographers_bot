@@ -360,69 +360,74 @@ async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 print("Notify error:", other_id, e, flush=True)
 
-async def handle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cancel_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    print("CANCEL CLICKED", flush=True)
+
     query = update.callback_query
     await query.answer()
 
-    event_id = query.data.split("_")[1]
-    tg_id = update.effective_user.id
+    tg_id = query.from_user.id
+    event_id = query.data.replace("cancel_", "", 1)
+
     sheets = context.bot_data["sheets"]
 
     async with event_lock:
 
         assignments = sheets.sheet_assignments.get_all_records()
 
-        # Проверка — уже принял?
-        for r in assignments:
-            if str(r["ID события"]) == str(event_id) and str(r["Telegram ID"]) == str(tg_id):
-                await query.answer("Вы уже приняли это мероприятие.", show_alert=True)
-                return
+        target_index = None
+        for i, row in enumerate(assignments, start=2):
+            if (
+                str(row.get("ID события")) == str(event_id)
+                and str(row.get("Telegram ID")) == str(tg_id)
+                and row.get("Статус") == "принял"
+            ):
+                target_index = i
+                break
 
-        # Проверка лимита
-        event_rows = sheets.sheet_events.get_all_records()
-        event = next((e for e in event_rows if str(e["ID"]) == str(event_id)), None)
-
-        if not event:
-            await query.answer("Событие не найдено.", show_alert=True)
+        if not target_index:
+            await query.answer("Назначение не найдено.", show_alert=True)
             return
 
-        required = int(event.get("Количество фотографов") or 0)
+        sheets.sheet_assignments.delete_rows(target_index)
 
-        accepted = [
-            r for r in assignments
-            if str(r["ID события"]) == str(event_id)
+        # Проверяем текущее количество принявших
+        updated = sheets.sheet_assignments.get_all_records()
+
+        current_accepts = [
+            r for r in updated
+            if str(r.get("ID события")) == str(event_id)
+            and r.get("Статус") == "принял"
         ]
 
-        if len(accepted) >= required:
-            await query.answer("Набрано необходимое количество фотографов.", show_alert=True)
-            return
+        # Получаем событие
+        events = sheets.sheet_events.get_all_records()
 
-        sheets.sheet_assignments.append_row([
-            event_id,
-            tg_id,
-            update.effective_user.first_name,
-            "принял",
-            datetime.now().isoformat(),
-            "",
-            ""
-        ])
+        for idx, row in enumerate(events, start=2):
+            if str(row.get("ID")) == str(event_id):
 
-        await query.answer("Вы приняли мероприятие.")
+                required = int(row.get("Количество фотографов") or 0)
 
-        new_count = len(event_assignments) + 1
+                if len(current_accepts) < required:
+                    sheets.sheet_events.update_cell(
+                        idx,
+                        3,
+                        "в работу"
+                    )
 
-        if new_count >= required_count:
-        # меняем статус события
-            event_row_index = next(
-            i for i, e in enumerate(events)
-            if str(e.get("ID")) == str(event_id)
-            ) + 2
+                break
 
-        sheets.sheet_events.update_cell(
-            event_row_index,
-            3,  # колонка Статус (проверь индекс)
-            "укомплектовано"
-            )
+    await query.edit_message_text(
+        f"❌ Вы отменили участие\n\n🆔 ID события: {event_id}"
+    )
+
+    # Перезапускаем распределение
+    await start_distribution(
+        context.application,
+        sheets,
+        event_id
+    )
 
 def register_handlers(application):
 
@@ -473,5 +478,9 @@ def register_handlers(application):
     )
 
     application.add_handler(
-    CallbackQueryHandler(accept_order, pattern="^accept_")
+        CallbackQueryHandler(accept_order, pattern="^accept_")
+    )
+
+    application.add_handler(
+        CallbackQueryHandler(cancel_order, pattern="^cancel_")
     )
