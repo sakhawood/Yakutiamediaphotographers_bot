@@ -71,6 +71,17 @@ async def start_distribution(application, sheets, event_id, required_count):
 
     print("Active photographers:", len(active_photographers), flush=True)
 
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "Принять",
+                callback_data=f"accept_{event_id}"
+            )
+        ]
+    ]
+
+    markup = InlineKeyboardMarkup(keyboard)
+
     for photographer in active_photographers:
 
         tg_id = photographer.get("Telegram ID")
@@ -78,17 +89,13 @@ async def start_distribution(application, sheets, event_id, required_count):
         if not tg_id:
             continue
 
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "Принять",
-                    callback_data=f"accept_{event_id}"
-                )
-            ]
-        ]
+        print("SENDING TO:", tg_id, flush=True)
 
-        await application.bot.send_message(
-            chat_id=tg_id,
-            text=f"Новое мероприятие {event_id}",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        try:
+            await application.bot.send_message(
+                chat_id=tg_id,
+                text=f"Новое мероприятие {event_id}",
+                reply_markup=markup
+            )
+        except Exception as e:
+            print("SEND ERROR:", e, flush=True)
