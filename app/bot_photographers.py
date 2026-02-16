@@ -362,8 +362,6 @@ async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cancel_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    print("CANCEL CLICKED", flush=True)
-
     query = update.callback_query
     await query.answer()
 
@@ -374,59 +372,75 @@ async def cancel_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     async with event_lock:
 
-        assignments = sheets.sheet_assignments.get_all_records()
+        # 1️⃣ Удаляем назначение
+        assignments = sheets.sheet_assignments.get_all_values()
 
-        target_index = None
-        for i, row in enumerate(assignments, start=2):
-            if (
-                str(row.get("ID события")) == str(event_id)
-                and str(row.get("Telegram ID")) == str(tg_id)
-                and row.get("Статус") == "принял"
-            ):
-                target_index = i
-                break
+        rows_to_delete = [
+            i for i, row in enumerate(assignments[1:], start=2)
+            if str(row[0]) == str(event_id)
+            and str(row[1]) == str(tg_id)
+        ]
 
-        if not target_index:
-            await query.answer("Назначение не найдено.", show_alert=True)
-            return
+        for i in reversed(rows_to_delete):
+            sheets.sheet_assignments.delete_rows(i)
 
-        sheets.sheet_assignments.delete_rows(target_index)
-
-        # Проверяем текущее количество принявших
-        updated = sheets.sheet_assignments.get_all_records()
+        # 2️⃣ Проверяем сколько осталось принятых
+        assignments_after = sheets.sheet_assignments.get_all_records()
 
         current_accepts = [
-            r for r in updated
+            r for r in assignments_after
             if str(r.get("ID события")) == str(event_id)
             and r.get("Статус") == "принял"
         ]
 
-        # Получаем событие
+        # 3️⃣ Получаем требуемое количество
         events = sheets.sheet_events.get_all_records()
+        event = next(
+            (e for e in events if str(e.get("ID")) == str(event_id)),
+            None
+        )
 
-        for idx, row in enumerate(events, start=2):
-            if str(row.get("ID")) == str(event_id):
+        if not event:
+            return
 
-                required = int(row.get("Количество фотографов") or 0)
+        required_count = int(event.get("Количество фотографов") or 0)
 
-                if len(current_accepts) < required:
-                    sheets.sheet_events.update_cell(
-                        idx,
-                        3,
-                        "в работу"
-                    )
+        # 4️⃣ Если теперь не укомплектовано — меняем статус
+        if len(current_accepts) < required_count:
 
-                break
+            for idx, row in enumerate(events, start=2):
+                if str(row.get("ID")) == str(event_id):
+                    sheets.sheet_events.update_cell(idx, 3, "в работу")
+                    break
+
+        # 5️⃣ Чистим NOTIFICATIONS
+        notifications = sheets.sheet_notifications.get_all_values()
+
+        # ID тех, кто всё ещё принял
+        accepted_ids = [
+            str(r.get("Telegram ID"))
+            for r in current_accepts
+        ]
+
+        rows_to_delete = []
+
+        for i, row in enumerate(notifications[1:], start=2):
+
+            notif_event_id = str(row[0])
+            notif_tg_id = str(row[1])
+
+            if notif_event_id != str(event_id):
+                continue
+
+            # если не входит в список действующих участников — удалить
+            if notif_tg_id not in accepted_ids:
+                rows_to_delete.append(i)
+
+        for i in reversed(rows_to_delete):
+            sheets.sheet_notifications.delete_rows(i)
 
     await query.edit_message_text(
-        f"❌ Вы отменили участие\n\n🆔 ID события: {event_id}"
-    )
-
-    # Перезапускаем распределение
-    await start_distribution(
-        context.application,
-        sheets,
-        event_id
+        f"❌ Вы отменили участие в мероприятии {event_id}"
     )
 
 def register_handlers(application):
