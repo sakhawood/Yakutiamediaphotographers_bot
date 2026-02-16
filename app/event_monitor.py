@@ -7,111 +7,66 @@ PROCESSED_EVENTS = set()
 
 
 async def monitor_events(context):
-
     sheets = context.job.data["sheets"]
 
     try:
         print("=== MONITOR START ===", flush=True)
 
-        records = sheets.sheet_events.get_all_records()
-        print("Total rows:", len(records), flush=True)
+        events = sheets.sheet_events.get_all_records()
+        assignments = sheets.sheet_assignments.get_all_records()
 
-        for idx, row in enumerate(records, start=2):
+        for idx, event in enumerate(events, start=2):
 
-            event_id = str(row.get("ID")).strip()
-            status = str(row.get("Статус")).strip()
-            photographers_needed = row.get("Количество фотографов")
-            duration = row.get("Продолжительность")
-            distributed = row.get("Распределение запущено")
+            event_id = str(event.get("ID")).strip()
+            status = str(event.get("Статус")).strip()
 
-            print(
-                f"Check event {event_id} | status={status}",
-                flush=True
-            )
-
-            # -------------------------
-            # 1. Только если "в работу"
-            # -------------------------
             if status != "в работу":
                 continue
 
-            # -------------------------
-            # 2. Если уже запускали — пропускаем
-            # -------------------------
-            if str(distributed).strip() == "1":
+            try:
+                required = int(event.get("Количество фотографов") or 0)
+            except:
+                required = 0
+
+            if required <= 0:
                 continue
 
-            print("START FIRST DISTRIBUTION", flush=True)
+            # Считаем принятых
+            accepted = [
+                a for a in assignments
+                if str(a.get("ID события")) == event_id
+                and a.get("Статус") == "принял"
+            ]
 
-            # -------------------------
-            # 3. Запускаем рассылку ОДИН РАЗ
-            # -------------------------
+            if len(accepted) >= required:
+                print("EVENT FULL → SETTING STATUS", flush=True)
+                sheets.sheet_events.update_cell(idx, 3, "укомплектовано")
+                continue
+
+            # Запускаем распределение
             await start_distribution(
                 context.application,
                 sheets,
-                event_id
+                event_id,
+                required,
+                accepted
             )
-
-            # -------------------------
-            # 4. Фиксируем запуск
-            # (колонка 15 — проверь индекс)
-            # -------------------------
-            sheets.sheet_events.update_cell(idx, 15, 1)
 
         print("=== MONITOR END ===", flush=True)
 
     except Exception as e:
-        print("Error in monitor_events:", repr(e), flush=True)
+        print("MONITOR ERROR:", repr(e), flush=True)
 
-async def start_distribution(application, sheets, event_id):
+async def start_distribution(application, sheets, event_id, required, accepted):
 
-    print(f"Distributing event {event_id}", flush=True)
+    print("Distributing event", event_id, flush=True)
 
     try:
-        # ----------------------------------
-        # 1. Получаем событие
-        # ----------------------------------
-        events = sheets.sheet_events.get_all_records()
-
-        event = next(
-            (e for e in events if str(e.get("ID")) == str(event_id)),
-            None
-        )
-
-        if not event:
-            print("EVENT NOT FOUND", flush=True)
-            return
-
-        try:
-            required_count = int(event.get("Количество фотографов") or 0)
-        except:
-            required_count = 0
-
-        if required_count <= 0:
-            print("INVALID REQUIRED COUNT", flush=True)
-            return
-
-        # ----------------------------------
-        # 2. Проверяем текущее количество принявших
-        # ----------------------------------
-        assignments = sheets.sheet_assignments.get_all_records()
-
         accepted_ids = {
             str(a.get("Telegram ID"))
-            for a in assignments
-            if str(a.get("ID события")) == str(event_id)
-            and a.get("Статус") == "принял"
+            for a in accepted
         }
 
-        print("CURRENT ACCEPTS:", len(accepted_ids), flush=True)
-
-        if len(accepted_ids) >= required_count:
-            print("ALREADY FULL — STOP DISTRIBUTION", flush=True)
-            return
-
-        # ----------------------------------
-        # 3. Получаем активных фотографов
-        # ----------------------------------
         photographers = sheets.sheet_photographers.get_all_records()
 
         active_photographers = [
@@ -119,34 +74,39 @@ async def start_distribution(application, sheets, event_id):
             if str(p.get("Активен", "")).strip() == "1"
         ]
 
-        print("Active photographers:", len(active_photographers), flush=True)
+        # Загружаем уведомления
+        notifications_raw = sheets.sheet_notifications.get_all_values()
 
-        if not active_photographers:
-            print("NO ACTIVE PHOTOGRAPHERS", flush=True)
+        if len(notifications_raw) <= 1:
+            notifications = []
+        else:
+            headers = notifications_raw[0]
+            notifications = [
+                dict(zip(headers, row))
+                for row in notifications_raw[1:]
+                if len(row) == len(headers)
+            ]
+
+        notified_ids = {
+            str(n.get("Telegram ID"))
+            for n in notifications
+            if str(n.get("ID события")) == event_id
+        }
+
+        # Кому можно отправлять?
+        eligible = [
+            p for p in active_photographers
+            if str(p.get("Telegram ID")) not in accepted_ids
+            and str(p.get("Telegram ID")) not in notified_ids
+        ]
+
+        if not eligible:
+            print("NO ELIGIBLE PHOTOGRAPHERS", flush=True)
             return
 
-        # ----------------------------------
-        # 4. Рассылка
-        # ----------------------------------
-        for photographer in active_photographers:
+        for p in eligible:
 
-            tg_id_raw = photographer.get("Telegram ID")
-
-            if not tg_id_raw:
-                continue
-
-            try:
-                tg_id = str(int(float(tg_id_raw)))
-            except:
-                print("INVALID TG ID:", tg_id_raw, flush=True)
-                continue
-
-            # ❗ не отправляем тем, кто уже принял
-            if tg_id in accepted_ids:
-                print("SKIP — ALREADY ACCEPTED:", tg_id, flush=True)
-                continue
-
-            print("SENDING TO:", tg_id, flush=True)
+            tg_id = int(str(p.get("Telegram ID")).split(".")[0])
 
             keyboard = [
                 [
@@ -157,26 +117,23 @@ async def start_distribution(application, sheets, event_id):
                 ]
             ]
 
-            try:
-                await application.bot.send_message(
-                    chat_id=int(tg_id),
-                    text=(
-                        f"📌 Новое мероприятие\n\n"
-                        f"🆔 ID события: {event_id}\n\n"
-                        f"📂 Тип: {event.get('Тип', '')}\n"
-                        f"🏷 Категория: {event.get('Категория', '')}\n"
-                        f"📅 Дата: {event.get('Дата мероприятия', '')}\n"
-                        f"⏰ Время: {event.get('Время начала', '')}"
-                    ),
-                    reply_markup=InlineKeyboardMarkup(keyboard)
-                )
+            msg = await application.bot.send_message(
+                chat_id=tg_id,
+                text=(
+                    f"📌 Новое мероприятие\n\n"
+                    f"🆔 ID: {event_id}\n"
+                    f"Количество фотографов: {required}"
+                ),
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
 
-                print("SENT OK", flush=True)
+            print("SENT TO:", tg_id, flush=True)
 
-            except Exception as e:
-                print("SEND ERROR:", repr(e), flush=True)
-
-        print("DISTRIBUTION FINISHED", flush=True)
+            sheets.sheet_notifications.append_row([
+                event_id,
+                tg_id,
+                datetime.utcnow().isoformat()
+            ])
 
     except Exception as e:
         print("DISTRIBUTION ERROR:", repr(e), flush=True)

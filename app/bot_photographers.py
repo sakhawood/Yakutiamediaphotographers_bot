@@ -362,6 +362,8 @@ async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cancel_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
+    print("CANCEL CLICKED", flush=True)
+
     query = update.callback_query
     await query.answer()
 
@@ -372,73 +374,48 @@ async def cancel_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     async with event_lock:
 
-        # 1️⃣ Удаляем назначение
-        assignments = sheets.sheet_assignments.get_all_values()
+        # 1️⃣ Получаем назначения
+        assignments = sheets.sheet_assignments.get_all_records()
 
-        rows_to_delete = [
-            i for i, row in enumerate(assignments[1:], start=2)
-            if str(row[0]) == str(event_id)
-            and str(row[1]) == str(tg_id)
-        ]
+        updated = False
 
-        for i in reversed(rows_to_delete):
-            sheets.sheet_assignments.delete_rows(i)
+        for idx, row in enumerate(assignments, start=2):
 
-        # 2️⃣ Проверяем сколько осталось принятых
-        assignments_after = sheets.sheet_assignments.get_all_records()
+            if (
+                str(row.get("ID события")) == str(event_id)
+                and str(row.get("Telegram ID")) == str(tg_id)
+                and row.get("Статус") == "принял"
+            ):
+                sheets.sheet_assignments.update_cell(idx, 4, "отменил")
+                updated = True
+                break
 
-        current_accepts = [
-            r for r in assignments_after
-            if str(r.get("ID события")) == str(event_id)
-            and r.get("Статус") == "принял"
-        ]
-
-        # 3️⃣ Получаем требуемое количество
-        events = sheets.sheet_events.get_all_records()
-        event = next(
-            (e for e in events if str(e.get("ID")) == str(event_id)),
-            None
-        )
-
-        if not event:
+        if not updated:
+            await query.answer("Назначение не найдено.", show_alert=True)
             return
 
-        required_count = int(event.get("Количество фотографов") or 0)
+        print("CANCEL SUCCESS", flush=True)
 
-        # 4️⃣ Если теперь не укомплектовано — меняем статус
-        if len(current_accepts) < required_count:
+        # 2️⃣ Проверяем событие
+        events = sheets.sheet_events.get_all_records()
 
-            for idx, row in enumerate(events, start=2):
-                if str(row.get("ID")) == str(event_id):
-                    sheets.sheet_events.update_cell(idx, 3, "в работу")
-                    break
+        for idx, event in enumerate(events, start=2):
 
-        # 5️⃣ Чистим NOTIFICATIONS
-        notifications = sheets.sheet_notifications.get_all_values()
+            if str(event.get("ID")) == str(event_id):
 
-        # ID тех, кто всё ещё принял
-        accepted_ids = [
-            str(r.get("Telegram ID"))
-            for r in current_accepts
-        ]
+                if event.get("Статус") == "укомплектовано":
 
-        rows_to_delete = []
+                    print("REOPEN EVENT", flush=True)
 
-        for i, row in enumerate(notifications[1:], start=2):
+                    sheets.sheet_events.update_cell(
+                        idx,
+                        3,
+                        "в работу"
+                    )
 
-            notif_event_id = str(row[0])
-            notif_tg_id = str(row[1])
+                break
 
-            if notif_event_id != str(event_id):
-                continue
-
-            # если не входит в список действующих участников — удалить
-            if notif_tg_id not in accepted_ids:
-                rows_to_delete.append(i)
-
-        for i in reversed(rows_to_delete):
-            sheets.sheet_notifications.delete_rows(i)
-
+    # 3️⃣ Обновляем сообщение
     await query.edit_message_text(
         f"❌ Вы отменили участие в мероприятии {event_id}"
     )
