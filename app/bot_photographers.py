@@ -219,7 +219,11 @@ async def back_to_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
+    from datetime import datetime
+
     query = update.callback_query
+    await query.answer()
+
     tg_id = query.from_user.id
     event_id = query.data.replace("accept_", "", 1)
 
@@ -227,6 +231,7 @@ async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     async with event_lock:
 
+        # Получаем событие
         events = sheets.sheet_events.get_all_records()
         event = next(
             (e for e in events if str(e.get("ID")) == str(event_id)),
@@ -234,36 +239,37 @@ async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         if not event:
-            await query.answer("Событие не найдено.", show_alert=True)
+            await query.edit_message_text("Событие не найдено.")
             return
 
         required_count = int(event.get("Количество фотографов") or 0)
 
+        # Читаем назначения
         assignments = sheets.sheet_assignments.get_all_records()
 
-        event_assignments = [
+        accepted = [
             r for r in assignments
             if str(r.get("ID события")) == str(event_id)
             and r.get("Статус") == "принял"
         ]
 
-        # Уже принял
-        if any(str(r.get("Telegram ID")) == str(tg_id) for r in event_assignments):
+        # Уже принял?
+        if any(str(r.get("Telegram ID")) == str(tg_id) for r in accepted):
             await query.answer(
                 "Вы уже приняли это мероприятие.",
                 show_alert=True
             )
             return
 
-        # Лимит заполнен
-        if len(event_assignments) >= required_count:
+        # Лимит достигнут?
+        if len(accepted) >= required_count:
             await query.answer(
                 "Набрано необходимое количество фотографов.",
                 show_alert=True
             )
             return
 
-        # Записываем принятие (ОДИН РАЗ)
+        # Добавляем запись
         sheets.sheet_assignments.append_row([
             event_id,
             tg_id,
@@ -274,7 +280,29 @@ async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ""
         ])
 
-    # ---- ВНЕ LOCK ----
+        # 🔥 ПЕРЕЧИТЫВАЕМ ПОСЛЕ ЗАПИСИ
+        assignments_after = sheets.sheet_assignments.get_all_records()
+
+        accepted_after = [
+            r for r in assignments_after
+            if str(r.get("ID события")) == str(event_id)
+            and r.get("Статус") == "принял"
+        ]
+
+        # Если мы оказались лишними — удаляем последнюю запись
+        if len(accepted_after) > required_count:
+
+            # Удаляем последнюю строку
+            last_row_index = len(assignments_after) + 1
+            sheets.sheet_assignments.delete_rows(last_row_index)
+
+            await query.answer(
+                "Вы не успели принять заказ.",
+                show_alert=True
+            )
+            return
+
+    # вне lock
     await query.edit_message_text(
         f"✅ Вы приняли мероприятие {event_id}"
     )
