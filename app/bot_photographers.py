@@ -282,6 +282,55 @@ async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Вы приняли мероприятие.",
     )
 
+async def handle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    event_id = query.data.split("_")[1]
+    tg_id = update.effective_user.id
+    sheets = context.bot_data["sheets"]
+
+    async with event_lock:
+
+        assignments = sheets.sheet_assignments.get_all_records()
+
+        # Проверка — уже принял?
+        for r in assignments:
+            if str(r["ID события"]) == str(event_id) and str(r["Telegram ID"]) == str(tg_id):
+                await query.answer("Вы уже приняли это мероприятие.", show_alert=True)
+                return
+
+        # Проверка лимита
+        event_rows = sheets.sheet_events.get_all_records()
+        event = next((e for e in event_rows if str(e["ID"]) == str(event_id)), None)
+
+        if not event:
+            await query.answer("Событие не найдено.", show_alert=True)
+            return
+
+        required = int(event.get("Количество фотографов") or 0)
+
+        accepted = [
+            r for r in assignments
+            if str(r["ID события"]) == str(event_id)
+        ]
+
+        if len(accepted) >= required:
+            await query.answer("Набрано необходимое количество фотографов.", show_alert=True)
+            return
+
+        sheets.sheet_assignments.append_row([
+            event_id,
+            tg_id,
+            update.effective_user.first_name,
+            "принял",
+            datetime.now().isoformat(),
+            "",
+            ""
+        ])
+
+        await query.answer("Вы приняли мероприятие.")
+
 def register_handlers(application):
 
     application.add_handler(CommandHandler("start", start))
