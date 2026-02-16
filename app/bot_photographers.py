@@ -4,6 +4,9 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CallbackQueryHandler
 from telegram import ReplyKeyboardMarkup
 from telegram.ext import MessageHandler, filters
+from locks import event_lock
+from datetime import datetime
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -214,33 +217,70 @@ async def open_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def back_to_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await my_orders(update, context)
 
-async def handle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     query = update.callback_query
     await query.answer()
 
-    data = query.data  # format: accept_EVENTID
-    event_id = data.split("_")[1]
+    tg_id = query.from_user.id
+    event_id = query.data.replace("accept_", "", 1)
 
-    sheets = context.bot_data.get("sheets")
-    user = update.effective_user
+    sheets = context.bot_data["sheets"]
 
-    required = 1  # временно фиксировано для теста
+    async with event_lock:
 
-    from app.locks import event_locks
-    from app.distributor import try_accept_event
+        # 1. Получаем событие
+        events = sheets.sheet_events.get_all_records()
+        event = next(
+            (e for e in events if str(e.get("ID")) == str(event_id)),
+            None
+        )
 
-    success = await try_accept_event(
-        sheets,
-        event_id,
-        user.id,
-        user.first_name,
-        required
+        if not event:
+            await query.edit_message_text("Событие не найдено.")
+            return
+
+        required_count = int(event.get("Количество фотографов") or 0)
+
+        # 2. Получаем назначения
+        assignments = sheets.sheet_assignments.get_all_records()
+
+        event_assignments = [
+            r for r in assignments
+            if str(r.get("ID события")) == str(event_id)
+            and r.get("Статус") == "принял"
+        ]
+
+        # 3. Проверка: уже принял?
+        already = any(
+            str(r.get("Telegram ID")) == str(tg_id)
+            for r in event_assignments
+        )
+
+        if already:
+            await query.answer("Вы уже приняли это мероприятие.", show_alert=True)
+            return
+
+        # 4. Проверка: превышен лимит?
+        if len(event_assignments) >= required_count:
+            await query.answer("Набрано необходимое количество фотографов.", show_alert=True)
+            return
+
+        # 5. Записываем принятие
+        sheets.sheet_assignments.append_row([
+            event_id,
+            tg_id,
+            query.from_user.first_name,
+            "принял",
+            datetime.utcnow().isoformat(),
+            "",
+            ""
+        ])
+
+    # вне lock
+    await query.edit_message_text(
+        "Вы приняли мероприятие.",
     )
-
-    if success:
-        await query.edit_message_text("Вы приняли мероприятие.")
-    else:
-        await query.edit_message_text("Лимит закрыт.")
 
 def register_handlers(application):
 
