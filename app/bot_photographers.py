@@ -137,6 +137,7 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
             continue
 
         button_text = (
+            f"🆔 {event_id} | "
             f"{event.get('Тип', '')} | "
             f"{event.get('Дата мероприятия', '')} | "
             f"{event.get('Время начала', '')} | "
@@ -160,14 +161,14 @@ async def open_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    event_id = query.data.replace("order_", "", 1)
+    event_id = query.data.split("_")[1]
 
     sheets = context.bot_data["sheets"]
 
     rows = sheets.sheet_events.get_all_records()
 
     event = next(
-        (r for r in rows if str(r.get("ID")) == str(event_id)),
+        (r for r in rows if str(r["ID"]) == str(event_id)),
         None
     )
 
@@ -175,16 +176,16 @@ async def open_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Событие не найдено.")
         return
 
-    customer = event.get("Заказчик", "") or "Не указано"
-    phone = str(event.get("Контактные данные", "")).replace(".0", "")
-    description = event.get("Описание мероприятия", "") or "Не указано"
-    place = event.get("Место проведения", "") or "Не указано"
-
     text = (
-        f"👤 Заказчик: {customer}\n"
-        f"📞 Телефон: {phone}\n\n"
-        f"📝 Описание:\n{description}\n\n"
-        f"📍 Место: {place}"
+        f"🆔 ID события: {event_id}\n\n"
+        f"👤 Заказчик: {event.get('Заказчик', '')}\n"
+        f"📞 Телефон: {event.get('Контактные данные', '')}\n\n"
+        f"📝 Описание:\n{event.get('Описание мероприятия', '')}\n\n"
+        f"📍 Место: {event.get('Место проведения', '')}\n\n"
+        f"📅 Дата: {event.get('Дата мероприятия', '')}\n"
+        f"⏰ Время: {event.get('Время начала', '')}\n"
+        f"📂 Тип: {event.get('Тип', '')}\n"
+        f"🏷 Категория: {event.get('Категория', '')}"
     )
 
     keyboard = [
