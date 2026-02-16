@@ -103,7 +103,17 @@ async def start_distribution(application, sheets, event_id):
             return
 
         # --- 4. Загружаем уведомления ---
-        notifications = sheets.sheet_notifications.get_all_records()
+        notifications = sheets.sheet_notifications.get_all_values()
+
+        if len(notifications) <= 1:
+            notifications = []
+        else:
+             headers = notifications[0]
+            notifications = [
+                dict(zip(headers, row))
+                for row in notifications[1:]
+                if len(row) == len(headers)
+            ]
 
         # --- 5. Рассылка ---
         for photographer in active_photographers:
