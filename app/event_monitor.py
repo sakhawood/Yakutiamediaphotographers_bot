@@ -103,15 +103,15 @@ async def start_distribution(application, sheets, event_id):
             return
 
         # --- 4. Загружаем уведомления ---
-        notifications = sheets.sheet_notifications.get_all_values()
+        notifications_raw = sheets.sheet_notifications.get_all_values()
 
-        if len(notifications) <= 1:
+        if len(notifications_raw) <= 1:
             notifications = []
         else:
-             headers = notifications[0]
+            headers = notifications_raw[0]
             notifications = [
                 dict(zip(headers, row))
-                for row in notifications[1:]
+                for row in notifications_raw[1:]
                 if len(row) == len(headers)
             ]
 
