@@ -370,6 +370,21 @@ async def handle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.answer("Вы приняли мероприятие.")
 
+        new_count = len(event_assignments) + 1
+
+        if new_count >= required_count:
+        # меняем статус события
+            event_row_index = next(
+            i for i, e in enumerate(events)
+            if str(e.get("ID")) == str(event_id)
+            ) + 2
+
+        sheets.sheet_events.update_cell(
+            event_row_index,
+            3,  # колонка Статус (проверь индекс)
+            "укомплектовано"
+            )
+
 def register_handlers(application):
 
     application.add_handler(CommandHandler("start", start))

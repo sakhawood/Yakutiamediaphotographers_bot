@@ -11,12 +11,12 @@ async def monitor_events(context):
     try:
         print("=== MONITOR START ===", flush=True)
 
-        records = sheets.sheet_events.get_all_records()
-        print("Total rows:", len(records), flush=True)
+        events = sheets.sheet_events.get_all_records()
+        assignments = sheets.sheet_assignments.get_all_records()
 
-        for idx, row in enumerate(records, start=2):
+        print("Total rows:", len(events), flush=True)
 
-            print("ROW:", row, flush=True)
+        for idx, row in enumerate(events, start=2):
 
             event_id = str(row.get("ID")).strip()
             status = str(row.get("Статус")).strip()
@@ -29,27 +29,44 @@ async def monitor_events(context):
                 flush=True
             )
 
-            distributed = row.get("Распределение запущено")
-
+            # базовые проверки
             if (
-                status == "в работу"
-                and photographers_needed
-                and duration
-                and not distributed
+                status != "в работу"
+                or not photographers_needed
+                or not duration
             ):
+                continue
 
-                print(f"Start distribution for event {event_id}", flush=True)
+            required_count = int(photographers_needed)
 
-                sheets.sheet_events.update_cell(idx, 15, 1)
+            # считаем текущие подтверждения
+            event_accepts = [
+                a for a in assignments
+                if str(a.get("ID события")) == str(event_id)
+                and a.get("Статус") == "принял"
+            ]
 
-                PROCESSED_EVENTS.add(event_id)
+            print("CURRENT ACCEPTS:", len(event_accepts), flush=True)
 
-                await start_distribution(
-                    context.application,
-                    sheets,
-                    event_id,
-                    int(photographers_needed)
+            # если уже набрано — закрываем событие и идём дальше
+            if len(event_accepts) >= required_count:
+
+                sheets.sheet_events.update_cell(
+                    idx,
+                    3,  # колонка "Статус"
+                    "укомплектовано"
                 )
+
+                continue
+
+            print(f"Start distribution for event {event_id}", flush=True)
+
+            await start_distribution(
+                context.application,
+                sheets,
+                event_id,
+                required_count
+            )
 
         print("=== MONITOR END ===", flush=True)
 
