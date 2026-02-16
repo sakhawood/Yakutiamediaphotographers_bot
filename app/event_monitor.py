@@ -15,13 +15,12 @@ async def monitor_events(context):
         records = sheets.sheet_events.get_all_records()
         print("Total rows:", len(records), flush=True)
 
-        for idx, row in enumerate(records, start=2):
+        for row in records:
 
             event_id = str(row.get("ID")).strip()
             status = str(row.get("Статус")).strip()
             photographers_needed = row.get("Количество фотографов")
             duration = row.get("Продолжительность")
-            distributed = row.get("Распределение запущено")
 
             print(
                 f"Check event {event_id} | status={status} | "
@@ -29,35 +28,17 @@ async def monitor_events(context):
                 flush=True
             )
 
-            # -------------------------------
-            # 1️⃣ Проверка базовых условий
-            # -------------------------------
-            if not (
+            # ✅ Единственная проверка
+            if (
                 status == "в работу"
                 and photographers_needed
                 and duration
             ):
-                continue
-
-            # -------------------------------
-            # 2️⃣ Проверка: уже рассылали?
-            # -------------------------------
-            if distributed:
-                continue
-
-            # -------------------------------
-            # 3️⃣ Запускаем рассылку
-            # -------------------------------
-            await start_distribution(
-                context.application,
-                sheets,
-                event_id
-            )
-
-            # -------------------------------
-            # 4️⃣ Фиксируем, что рассылка была
-            # -------------------------------
-            sheets.sheet_events.update_cell(idx, 15, 1)
+                await start_distribution(
+                    context.application,
+                    sheets,
+                    event_id
+                )
 
         print("=== MONITOR END ===", flush=True)
 
