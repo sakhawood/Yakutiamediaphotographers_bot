@@ -93,11 +93,11 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sheets = context.bot_data["sheets"]
     tg_id = update.effective_user.id
 
-    rows = sheets.sheet_assignments.get_all_records()
-    print("ASSIGNMENTS:", rows, flush=True)
+    assignments = sheets.sheet_assignments.get_all_records()
+    print("ASSIGNMENTS:", assignments, flush=True)
 
     my_rows = [
-        r for r in rows
+        r for r in assignments
         if str(r["Telegram ID"]) == str(tg_id)
         and r["Статус"] == "принял"
     ]
@@ -116,13 +116,34 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text("У вас нет активных заказов.")
         return
 
+    # Получаем события
+    events = sheets.sheet_events.get_all_records()
+
+    # Создаём словарь ID → событие
+    events_map = {
+        str(e.get("ID")): e
+        for e in events
+    }
+
     keyboard = []
 
     for r in my_rows:
-        event_id = r["ID события"]
+        event_id = str(r["ID события"])
+        event = events_map.get(event_id)
+
+        if not event:
+            continue
+
+        button_text = (
+            f"{event.get('Тип', '')} | "
+            f"{event.get('Дата мероприятия', '')} | "
+            f"{event.get('Время начала', '')} | "
+            f"{event.get('Категория', '')}"
+        )
+
         keyboard.append([
             InlineKeyboardButton(
-                f"{event_id} — принял",
+                button_text,
                 callback_data=f"order_{event_id}"
             )
         ])
@@ -137,14 +158,14 @@ async def open_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    event_id = query.data.split("_")[1]
+    event_id = query.data.replace("order_", "", 1)
 
     sheets = context.bot_data["sheets"]
 
     rows = sheets.sheet_events.get_all_records()
 
     event = next(
-        (r for r in rows if str(r["ID"]) == str(event_id)),
+        (r for r in rows if str(r.get("ID")) == str(event_id)),
         None
     )
 
@@ -152,11 +173,16 @@ async def open_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Событие не найдено.")
         return
 
+    customer = event.get("Заказчик", "") or "Не указано"
+    phone = str(event.get("Контактные данные", "")).replace(".0", "")
+    description = event.get("Описание мероприятия", "") or "Не указано"
+    place = event.get("Место проведения", "") or "Не указано"
+
     text = (
-        f"Мероприятие: {event_id}\n"
-        f"Дата: {event['Дата мероприятия']}\n"
-        f"Время: {event['Время начала']}\n"
-        f"Место: {event['Место проведения']}\n"
+        f"👤 Заказчик: {customer}\n"
+        f"📞 Телефон: {phone}\n\n"
+        f"📝 Описание:\n{description}\n\n"
+        f"📍 Место: {place}"
     )
 
     keyboard = [
