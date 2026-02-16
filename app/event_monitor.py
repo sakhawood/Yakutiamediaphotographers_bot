@@ -85,8 +85,15 @@ async def start_distribution(application, sheets, event_id):
         print("CURRENT ACCEPTS:", len(current_accepts), flush=True)
 
         if len(current_accepts) >= required_count:
-            print("ALREADY FULL", flush=True)
-            return
+            print("ALREADY FULL → SET STATUS", flush=True)
+
+            # обновляем статус события
+            for idx2, e in enumerate(events, start=2):
+                if str(e.get("ID")) == str(event_id):
+                    sheets.sheet_events.update_cell(idx2, 3, "укомплектовано")
+            break
+
+        return
 
         # --- 3. Получаем активных фотографов ---
         photographers = sheets.sheet_photographers.get_all_records()
