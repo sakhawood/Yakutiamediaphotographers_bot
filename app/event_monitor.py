@@ -122,9 +122,10 @@ async def start_distribution(application, sheets, event_id):
             print("NO ACTIVE PHOTOGRAPHERS", flush=True)
             return
 
-        # --- 4. Проверяем NOTIFICATIONS (чтобы не спамить) ---
+        # --- 4. Загружаем уведомления один раз ---
         notifications = sheets.sheet_notifications.get_all_records()
 
+        # --- 5. Рассылка ---
         for photographer in active_photographers:
 
             tg_id = photographer.get("Telegram ID")
@@ -132,7 +133,7 @@ async def start_distribution(application, sheets, event_id):
             if not tg_id:
                 continue
 
-            # Проверка: уже отправляли этому фотографу?
+            # Проверка: уже отправляли?
             already_sent = any(
                 str(n.get("ID события")) == str(event_id)
                 and str(n.get("Telegram ID")) == str(tg_id)
@@ -142,7 +143,6 @@ async def start_distribution(application, sheets, event_id):
             if already_sent:
                 continue
 
-            # --- 5. Отправляем сообщение ---
             print("SENDING TO:", tg_id, flush=True)
 
             keyboard = [
@@ -167,7 +167,7 @@ async def start_distribution(application, sheets, event_id):
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
 
-                # --- 6. Фиксируем в NOTIFICATIONS ---
+                # Фиксируем отправку
                 sheets.sheet_notifications.append_row([
                     event_id,
                     tg_id,
