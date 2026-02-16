@@ -28,7 +28,7 @@ async def monitor_events(context):
                 flush=True
             )
 
-            # 1️⃣ Базовая проверка
+            # 1️⃣ Базовые условия
             if not (
                 status == "в работу"
                 and photographers_needed
@@ -36,7 +36,6 @@ async def monitor_events(context):
             ):
                 continue
 
-            # 2️⃣ Проверяем текущие назначения
             assignments = sheets.sheet_assignments.get_all_records()
 
             current_accepts = [
@@ -47,13 +46,13 @@ async def monitor_events(context):
 
             required_count = int(photographers_needed or 0)
 
-            # 3️⃣ Если укомплектовано → меняем статус
+            # 2️⃣ Если уже укомплектовано — меняем статус
             if len(current_accepts) >= required_count:
-                print("ALREADY FULL → SET STATUS", flush=True)
+                print("SET TO COMPLETED", flush=True)
                 sheets.sheet_events.update_cell(idx, 3, "укомплектовано")
                 continue
 
-            # 4️⃣ Запускаем рассылку
+            # 3️⃣ Запускаем рассылку
             await start_distribution(
                 context.application,
                 sheets,
@@ -63,7 +62,7 @@ async def monitor_events(context):
         print("=== MONITOR END ===", flush=True)
 
     except Exception as e:
-        print("Error in monitor_events:", e, flush=True)
+        print("Error in monitor_events:", repr(e), flush=True)
         await asyncio.sleep(5)
 
 async def start_distribution(application, sheets, event_id):
