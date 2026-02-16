@@ -70,7 +70,7 @@ async def start_distribution(application, sheets, event_id):
     print(f"Distributing event {event_id}", flush=True)
 
     try:
-        # 1. Получаем событие
+        # --- 1. Получаем событие ---
         events = sheets.sheet_events.get_all_records()
 
         event = next(
@@ -82,13 +82,16 @@ async def start_distribution(application, sheets, event_id):
             print("EVENT NOT FOUND", flush=True)
             return
 
-        required_count = int(event.get("Количество фотографов") or 0)
+        try:
+            required_count = int(event.get("Количество фотографов") or 0)
+        except:
+            required_count = 0
 
         if required_count <= 0:
             print("INVALID REQUIRED COUNT", flush=True)
             return
 
-        # 2. Проверяем текущие назначения
+        # --- 2. Проверяем текущее количество принятых ---
         assignments = sheets.sheet_assignments.get_all_records()
 
         current_accepts = [
@@ -103,7 +106,7 @@ async def start_distribution(application, sheets, event_id):
             print("ALREADY FULL", flush=True)
             return
 
-        # 3. Получаем активных фотографов
+        # --- 3. Получаем активных фотографов ---
         photographers = sheets.sheet_photographers.get_all_records()
 
         active_photographers = [
@@ -117,7 +120,7 @@ async def start_distribution(application, sheets, event_id):
             print("NO ACTIVE PHOTOGRAPHERS", flush=True)
             return
 
-        # 4. Загружаем уведомления
+        # --- 4. Загружаем уведомления ---
         notifications_raw = sheets.sheet_notifications.get_all_values()
 
         if len(notifications_raw) <= 1:
@@ -130,7 +133,7 @@ async def start_distribution(application, sheets, event_id):
                 if len(row) == len(headers)
             ]
 
-        # 5. Рассылка
+        # --- 5. Рассылка ---
         for photographer in active_photographers:
 
             tg_id_raw = photographer.get("Telegram ID")
@@ -168,11 +171,13 @@ async def start_distribution(application, sheets, event_id):
                 msg = await application.bot.send_message(
                     chat_id=tg_id,
                     text=(
-                        f"📌 Новое мероприятие\n\n"
+                        f"📌 Новое мероприятие\n"
+                        f"🆔 ID: {event_id}\n\n"
                         f"Тип: {event.get('Тип', '')}\n"
                         f"Категория: {event.get('Категория', '')}\n"
                         f"Дата: {event.get('Дата мероприятия', '')}\n"
-                        f"Время: {event.get('Время начала', '')}"
+                        f"Время: {event.get('Время начала', '')}\n"
+                        f"Требуется фотографов: {required_count}"
                     ),
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
