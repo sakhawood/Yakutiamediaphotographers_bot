@@ -217,7 +217,6 @@ async def back_to_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await my_orders(update, context)
 
 async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("ACCEPT CLICKED", flush=True)
 
     from datetime import datetime
 
@@ -231,7 +230,6 @@ async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     async with event_lock:
 
-        # Получаем событие
         events = sheets.sheet_events.get_all_records()
         event = next(
             (e for e in events if str(e.get("ID")) == str(event_id)),
@@ -239,12 +237,11 @@ async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         if not event:
-            await query.edit_message_text("Событие не найдено.")
+            await query.answer("Событие не найдено.", show_alert=True)
             return
 
         required_count = int(event.get("Количество фотографов") or 0)
 
-        # Читаем назначения
         assignments = sheets.sheet_assignments.get_all_records()
 
         accepted = [
@@ -269,7 +266,7 @@ async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # Добавляем запись
+        # Записываем
         sheets.sheet_assignments.append_row([
             event_id,
             tg_id,
@@ -280,35 +277,12 @@ async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ""
         ])
 
-        # 🔥 ПЕРЕЧИТЫВАЕМ ПОСЛЕ ЗАПИСИ
-        assignments_after = sheets.sheet_assignments.get_all_records()
-
-        accepted_after = [
-            r for r in assignments_after
-            if str(r.get("ID события")) == str(event_id)
-            and r.get("Статус") == "принял"
-        ]
-
-        # Если мы оказались лишними — удаляем последнюю запись
-        if len(accepted_after) > required_count:
-
-            # Удаляем последнюю строку
-            last_row_index = len(assignments_after) + 1
-            sheets.sheet_assignments.delete_rows(last_row_index)
-
-            await query.answer(
-                "Вы не успели принять заказ.",
-                show_alert=True
-            )
-            return
-    print("SUCCESS ACCEPT:", tg_id, flush=True)
-
-    # вне lock
+    # Вне lock
     await query.answer("Вы приняли заказ", show_alert=True)
 
     await context.bot.send_message(
         chat_id=tg_id,
-     text=f"✅ Вы приняли мероприятие {event_id}"
+        text=f"✅ Вы приняли мероприятие {event_id}"
     )
 
 async def handle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
