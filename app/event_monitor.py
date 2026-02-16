@@ -70,7 +70,9 @@ async def start_distribution(application, sheets, event_id):
     print(f"Distributing event {event_id}", flush=True)
 
     try:
-        # --- 1. Получаем событие ---
+        # ----------------------------------
+        # 1. Получаем событие
+        # ----------------------------------
         events = sheets.sheet_events.get_all_records()
 
         event = next(
@@ -91,22 +93,27 @@ async def start_distribution(application, sheets, event_id):
             print("INVALID REQUIRED COUNT", flush=True)
             return
 
-        # --- 2. Проверяем текущее количество принятых ---
+        # ----------------------------------
+        # 2. Проверяем текущее количество принявших
+        # ----------------------------------
         assignments = sheets.sheet_assignments.get_all_records()
 
-        current_accepts = [
-            a for a in assignments
+        accepted_ids = {
+            str(a.get("Telegram ID"))
+            for a in assignments
             if str(a.get("ID события")) == str(event_id)
             and a.get("Статус") == "принял"
-        ]
+        }
 
-        print("CURRENT ACCEPTS:", len(current_accepts), flush=True)
+        print("CURRENT ACCEPTS:", len(accepted_ids), flush=True)
 
-        if len(current_accepts) >= required_count:
-            print("ALREADY FULL", flush=True)
+        if len(accepted_ids) >= required_count:
+            print("ALREADY FULL — STOP DISTRIBUTION", flush=True)
             return
 
-        # --- 3. Получаем активных фотографов ---
+        # ----------------------------------
+        # 3. Получаем активных фотографов
+        # ----------------------------------
         photographers = sheets.sheet_photographers.get_all_records()
 
         active_photographers = [
@@ -120,20 +127,9 @@ async def start_distribution(application, sheets, event_id):
             print("NO ACTIVE PHOTOGRAPHERS", flush=True)
             return
 
-        # --- 4. Загружаем уведомления ---
-        notifications_raw = sheets.sheet_notifications.get_all_values()
-
-        if len(notifications_raw) <= 1:
-            notifications = []
-        else:
-            headers = notifications_raw[0]
-            notifications = [
-                dict(zip(headers, row))
-                for row in notifications_raw[1:]
-                if len(row) == len(headers)
-            ]
-
-        # --- 5. Рассылка ---
+        # ----------------------------------
+        # 4. Рассылка
+        # ----------------------------------
         for photographer in active_photographers:
 
             tg_id_raw = photographer.get("Telegram ID")
@@ -142,18 +138,14 @@ async def start_distribution(application, sheets, event_id):
                 continue
 
             try:
-                tg_id = int(str(tg_id_raw).split(".")[0])
+                tg_id = str(int(float(tg_id_raw)))
             except:
                 print("INVALID TG ID:", tg_id_raw, flush=True)
                 continue
 
-            already_sent = any(
-                str(n.get("ID события")) == str(event_id)
-                and str(n.get("Telegram ID")) == str(tg_id)
-                for n in notifications
-            )
-
-            if already_sent:
+            # ❗ не отправляем тем, кто уже принял
+            if tg_id in accepted_ids:
+                print("SKIP — ALREADY ACCEPTED:", tg_id, flush=True)
                 continue
 
             print("SENDING TO:", tg_id, flush=True)
@@ -168,27 +160,20 @@ async def start_distribution(application, sheets, event_id):
             ]
 
             try:
-                msg = await application.bot.send_message(
-                    chat_id=tg_id,
+                await application.bot.send_message(
+                    chat_id=int(tg_id),
                     text=(
-                        f"📌 Новое мероприятие\n"
-                        f"🆔 ID: {event_id}\n\n"
-                        f"Тип: {event.get('Тип', '')}\n"
-                        f"Категория: {event.get('Категория', '')}\n"
-                        f"Дата: {event.get('Дата мероприятия', '')}\n"
-                        f"Время: {event.get('Время начала', '')}\n"
-                        f"Требуется фотографов: {required_count}"
+                        f"📌 Новое мероприятие\n\n"
+                        f"🆔 ID события: {event_id}\n\n"
+                        f"📂 Тип: {event.get('Тип', '')}\n"
+                        f"🏷 Категория: {event.get('Категория', '')}\n"
+                        f"📅 Дата: {event.get('Дата мероприятия', '')}\n"
+                        f"⏰ Время: {event.get('Время начала', '')}"
                     ),
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
 
-                print("SENT OK:", msg.message_id, flush=True)
-
-                sheets.sheet_notifications.append_row([
-                    event_id,
-                    tg_id,
-                    datetime.utcnow().isoformat()
-                ])
+                print("SENT OK", flush=True)
 
             except Exception as e:
                 print("SEND ERROR:", repr(e), flush=True)
