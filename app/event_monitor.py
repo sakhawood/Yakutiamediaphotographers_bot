@@ -7,6 +7,7 @@ PROCESSED_EVENTS = set()
 
 
 async def monitor_events(context):
+
     sheets = context.job.data["sheets"]
 
     try:
@@ -21,49 +22,46 @@ async def monitor_events(context):
             status = str(row.get("Статус")).strip()
             photographers_needed = row.get("Количество фотографов")
             duration = row.get("Продолжительность")
+            distributed = row.get("Распределение запущено")
 
             print(
-                f"Check event {event_id} | status={status} | "
-                f"N={photographers_needed} | duration={duration}",
+                f"Check event {event_id} | status={status}",
                 flush=True
             )
 
-            # 1️⃣ Базовые условия
-            if not (
-                status == "в работу"
-                and photographers_needed
-                and duration
-            ):
+            # -------------------------
+            # 1. Только если "в работу"
+            # -------------------------
+            if status != "в работу":
                 continue
 
-            assignments = sheets.sheet_assignments.get_all_records()
-
-            current_accepts = [
-                a for a in assignments
-                if str(a.get("ID события")) == str(event_id)
-                and a.get("Статус") == "принял"
-            ]
-
-            required_count = int(photographers_needed or 0)
-
-            # 2️⃣ Если уже укомплектовано — меняем статус
-            if len(current_accepts) >= required_count:
-                print("SET TO COMPLETED", flush=True)
-                sheets.sheet_events.update_cell(idx, 3, "укомплектовано")
+            # -------------------------
+            # 2. Если уже запускали — пропускаем
+            # -------------------------
+            if str(distributed).strip() == "1":
                 continue
 
-            # 3️⃣ Запускаем рассылку
+            print("START FIRST DISTRIBUTION", flush=True)
+
+            # -------------------------
+            # 3. Запускаем рассылку ОДИН РАЗ
+            # -------------------------
             await start_distribution(
                 context.application,
                 sheets,
                 event_id
             )
 
+            # -------------------------
+            # 4. Фиксируем запуск
+            # (колонка 15 — проверь индекс)
+            # -------------------------
+            sheets.sheet_events.update_cell(idx, 15, 1)
+
         print("=== MONITOR END ===", flush=True)
 
     except Exception as e:
         print("Error in monitor_events:", repr(e), flush=True)
-        await asyncio.sleep(5)
 
 async def start_distribution(application, sheets, event_id):
 
