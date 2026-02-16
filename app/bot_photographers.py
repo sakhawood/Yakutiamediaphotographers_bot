@@ -220,8 +220,6 @@ async def back_to_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
-    await query.answer()
-
     tg_id = query.from_user.id
     event_id = query.data.replace("accept_", "", 1)
 
@@ -229,7 +227,6 @@ async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     async with event_lock:
 
-        # 1. Получаем событие
         events = sheets.sheet_events.get_all_records()
         event = next(
             (e for e in events if str(e.get("ID")) == str(event_id)),
@@ -237,12 +234,11 @@ async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         if not event:
-            await query.edit_message_text("Событие не найдено.")
+            await query.answer("Событие не найдено.", show_alert=True)
             return
 
         required_count = int(event.get("Количество фотографов") or 0)
 
-        # 2. Получаем назначения
         assignments = sheets.sheet_assignments.get_all_records()
 
         event_assignments = [
@@ -251,22 +247,23 @@ async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
             and r.get("Статус") == "принял"
         ]
 
-        # 3. Проверка: уже принял?
-        already = any(
-            str(r.get("Telegram ID")) == str(tg_id)
-            for r in event_assignments
-        )
-
-        if already:
-            await query.answer("Вы уже приняли это мероприятие.", show_alert=True)
+        # Уже принял
+        if any(str(r.get("Telegram ID")) == str(tg_id) for r in event_assignments):
+            await query.answer(
+                "Вы уже приняли это мероприятие.",
+                show_alert=True
+            )
             return
 
-        # 4. Проверка: превышен лимит?
+        # Лимит заполнен
         if len(event_assignments) >= required_count:
-            await query.answer("Набрано необходимое количество фотографов.", show_alert=True)
+            await query.answer(
+                "Набрано необходимое количество фотографов.",
+                show_alert=True
+            )
             return
 
-        # 5. Записываем принятие
+        # Записываем принятие (ОДИН РАЗ)
         sheets.sheet_assignments.append_row([
             event_id,
             tg_id,
@@ -277,9 +274,9 @@ async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ""
         ])
 
-    # вне lock
+    # ---- ВНЕ LOCK ----
     await query.edit_message_text(
-        "Вы приняли мероприятие.",
+        f"✅ Вы приняли мероприятие {event_id}"
     )
 
 async def handle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
