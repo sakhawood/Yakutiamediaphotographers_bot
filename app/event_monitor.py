@@ -11,17 +11,16 @@ async def monitor_events(context):
     try:
         print("=== MONITOR START ===", flush=True)
 
-        events = sheets.sheet_events.get_all_records()
-        assignments = sheets.sheet_assignments.get_all_records()
+        records = sheets.sheet_events.get_all_records()
+        print("Total rows:", len(records), flush=True)
 
-        print("Total rows:", len(events), flush=True)
-
-        for idx, row in enumerate(events, start=2):
+        for idx, row in enumerate(records, start=2):
 
             event_id = str(row.get("ID")).strip()
             status = str(row.get("Статус")).strip()
             photographers_needed = row.get("Количество фотографов")
             duration = row.get("Продолжительность")
+            distributed = row.get("Распределение запущено")
 
             print(
                 f"Check event {event_id} | status={status} | "
@@ -29,44 +28,35 @@ async def monitor_events(context):
                 flush=True
             )
 
-            # базовые проверки
-            if (
-                status != "в работу"
-                or not photographers_needed
-                or not duration
+            # -------------------------------
+            # 1️⃣ Проверка базовых условий
+            # -------------------------------
+            if not (
+                status == "в работу"
+                and photographers_needed
+                and duration
             ):
                 continue
 
-            required_count = int(photographers_needed)
-
-            # считаем текущие подтверждения
-            event_accepts = [
-                a for a in assignments
-                if str(a.get("ID события")) == str(event_id)
-                and a.get("Статус") == "принял"
-            ]
-
-            print("CURRENT ACCEPTS:", len(event_accepts), flush=True)
-
-            # если уже набрано — закрываем событие и идём дальше
-            if len(event_accepts) >= required_count:
-
-                sheets.sheet_events.update_cell(
-                    idx,
-                    3,  # колонка "Статус"
-                    "укомплектовано"
-                )
-
+            # -------------------------------
+            # 2️⃣ Проверка: уже рассылали?
+            # -------------------------------
+            if distributed:
                 continue
 
-            print(f"Start distribution for event {event_id}", flush=True)
-
+            # -------------------------------
+            # 3️⃣ Запускаем рассылку
+            # -------------------------------
             await start_distribution(
                 context.application,
                 sheets,
-                event_id,
-                required_count
+                event_id
             )
+
+            # -------------------------------
+            # 4️⃣ Фиксируем, что рассылка была
+            # -------------------------------
+            sheets.sheet_events.update_cell(idx, 15, 1)
 
         print("=== MONITOR END ===", flush=True)
 
@@ -75,44 +65,53 @@ async def monitor_events(context):
         await asyncio.sleep(5)
 
 
-async def start_distribution(application, sheets, event_id, required_count):
+async def start_distribution(application, sheets, event_id):
 
     print(f"Distributing event {event_id}", flush=True)
 
     photographers = sheets.sheet_photographers.get_all_records()
+    notifications = sheets.sheet_notifications.get_all_records()
 
     active_photographers = [
         p for p in photographers
         if str(p.get("Активен", "1")).strip() == "1"
     ]
 
-    print("Active photographers:", len(active_photographers), flush=True)
-
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                "Принять",
-                callback_data=f"accept_{event_id}"
-            )
-        ]
-    ]
-
-    markup = InlineKeyboardMarkup(keyboard)
-
     for photographer in active_photographers:
 
         tg_id = photographer.get("Telegram ID")
-
         if not tg_id:
             continue
 
-        print("SENDING TO:", tg_id, flush=True)
+        # Проверяем — уже уведомляли?
+        already_notified = any(
+            str(n.get("ID события")) == str(event_id)
+            and str(n.get("Telegram ID")) == str(tg_id)
+            for n in notifications
+        )
+
+        if already_notified:
+            continue
 
         try:
             await application.bot.send_message(
                 chat_id=tg_id,
-                text=f"Новое мероприятие {event_id}",
-                reply_markup=markup
+                text=f"📸 Новый заказ {event_id}\nНажмите принять.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(
+                        "✅ Принять",
+                        callback_data=f"accept_{event_id}"
+                    )]
+                ])
             )
+
+            # Фиксируем факт уведомления
+            sheets.sheet_notifications.append_row([
+                event_id,
+                tg_id
+            ])
+
+            print("NOTIFIED:", tg_id, flush=True)
+
         except Exception as e:
-            print("SEND ERROR:", e, flush=True)
+            print("Send error:", e, flush=True)

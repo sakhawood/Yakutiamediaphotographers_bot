@@ -16,12 +16,17 @@ class SheetsClient:
 
         self.gc = gspread.authorize(creds)
 
+        # Книги
         self.book_events = self.gc.open("Order_Yakutia.media")
         self.book_photographers = self.gc.open("Order_Photographers")
 
+        # Листы Order_Yakutia.media
         self.sheet_events = self.book_events.worksheet("СОБЫТИЯ")
         self.sheet_assignments = self.book_events.worksheet("НАЗНАЧЕНИЯ")
+
+        # Листы Order_Photographers
         self.sheet_photographers = self.book_photographers.worksheet("ФОТОГРАФЫ")
+        self.sheet_notifications = self.book_photographers.worksheet("NOTIFICATIONS")
 
     def get_active_events(self):
         rows = self.sheet_events.get_all_records()
