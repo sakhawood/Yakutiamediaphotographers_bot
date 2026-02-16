@@ -5,7 +5,6 @@ from telegram.ext import CallbackQueryHandler
 from telegram import ReplyKeyboardMarkup
 from telegram.ext import MessageHandler, filters
 from app.locks import event_lock
-from datetime import datetime
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -218,6 +217,7 @@ async def back_to_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await my_orders(update, context)
 
 async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("ACCEPT CLICKED", flush=True)
 
     from datetime import datetime
 
@@ -301,10 +301,14 @@ async def accept_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 show_alert=True
             )
             return
+    print("SUCCESS ACCEPT:", tg_id, flush=True)
 
     # вне lock
-    await query.edit_message_text(
-        f"✅ Вы приняли мероприятие {event_id}"
+    await query.answer("Вы приняли заказ", show_alert=True)
+
+    await context.bot.send_message(
+        chat_id=tg_id,
+     text=f"✅ Вы приняли мероприятие {event_id}"
     )
 
 async def handle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -405,5 +409,5 @@ def register_handlers(application):
     )
 
     application.add_handler(
-        CallbackQueryHandler(handle_accept, pattern="^accept_")
+    CallbackQueryHandler(accept_order, pattern="^accept_")
     )
