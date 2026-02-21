@@ -5,6 +5,9 @@ from telegram.ext import CallbackQueryHandler
 from telegram import ReplyKeyboardMarkup
 from telegram.ext import MessageHandler, filters
 from app.locks import event_lock
+from datetime import datetime
+
+GROUP_CHAT_ID = -1003824519107 # ← вставь реальный ID группы заявки_Yakutia.media
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -441,6 +444,115 @@ async def route_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE)
     elif "выключить" in text.lower() or "включить" in text.lower():
         await toggle_status(update, context)
 
+async def start_upload_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    query = update.callback_query
+    await query.answer()
+
+    event_id = query.data.replace("upload_", "", 1)
+
+    context.user_data["awaiting_link"] = event_id
+
+    await query.edit_message_text(
+        f"🆔 ID события: {event_id}\n\n"
+        f"Отправьте ссылку на фотографии."
+    )
+
+async def handle_link_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if "awaiting_link" not in context.user_data:
+        return
+
+    event_id = context.user_data.pop("awaiting_link")
+    link = update.message.text.strip()
+    tg_id = update.effective_user.id
+    username = update.effective_user.username or update.effective_user.first_name
+
+    sheets = context.bot_data["sheets"]
+
+    async with event_lock:
+
+        assignments = sheets.sheet_assignments.get_all_records()
+
+        # --- 1. Обновляем назначение ---
+        for idx, row in enumerate(assignments, start=2):
+
+            if (
+                str(row.get("ID события")) == str(event_id)
+                and str(row.get("Telegram ID")) == str(tg_id)
+                and row.get("Статус") == "принял"
+            ):
+
+                # Статус → завершил
+                sheets.sheet_assignments.update_cell(idx, 4, "завершил")
+
+                # Время завершения
+                sheets.sheet_assignments.update_cell(
+                    idx,
+                    6,
+                    datetime.utcnow().isoformat()
+                )
+
+                # Ссылка
+                sheets.sheet_assignments.update_cell(
+                    idx,
+                    7,
+                    link
+                )
+
+                break
+
+        # --- 2. Проверяем, все ли завершили ---
+        assignments_after = sheets.sheet_assignments.get_all_records()
+
+        finished = [
+            a for a in assignments_after
+            if str(a.get("ID события")) == str(event_id)
+            and a.get("Статус") == "завершил"
+        ]
+
+        events = sheets.sheet_events.get_all_records()
+
+        for idx, event in enumerate(events, start=2):
+
+            if str(event.get("ID")) == str(event_id):
+
+                required = int(event.get("Количество фотографов") or 0)
+
+                if len(finished) >= required:
+
+                    sheets.sheet_events.update_cell(
+                        idx,
+                        3,
+                        "завершено"
+                    )
+
+                    await context.application.bot.send_message(
+                        chat_id=GROUP_CHAT_ID,
+                        text=(
+                            f"🏁 Событие полностью завершено\n\n"
+                            f"🆔 ID: {event_id}\n"
+                            f"Фотографов: {required}"
+                        )
+                    )
+
+                break
+
+    # --- 3. Подтверждение пользователю ---
+    await update.message.reply_text(
+        f"✅ Ссылка сохранена для события {event_id}"
+    )
+
+    # --- 4. Уведомление в группу о конкретном фотографе ---
+    await context.application.bot.send_message(
+        chat_id=GROUP_CHAT_ID,
+        text=(
+            f"📸 Завершено фотографом\n\n"
+            f"🆔 ID: {event_id}\n"
+            f"👤 @{username}\n"
+            f"🔗 {link}"
+        )
+    )
 
 def register_handlers(application):
 
@@ -474,4 +586,12 @@ def register_handlers(application):
 
     application.add_handler(
         CallbackQueryHandler(cancel_order, pattern="^cancel_")
+    )
+
+    application.add_handler(
+        CallbackQueryHandler(start_upload_link, pattern="^upload_")
+    )
+
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link_input)
     )
