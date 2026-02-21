@@ -545,15 +545,15 @@ async def handle_link_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # --- 4. Уведомление в группу о конкретном фотографе ---
     try:
-    await context.application.bot.send_message(
-        chat_id=GROUP_CHAT_ID,
-        text=(
-            f"📸 Завершено фотографом\n\n"
-            f"🆔 ID: {event_id}\n"
-            f"👤 @{username}\n"
-            f"🔗 {link}"
+        await context.application.bot.send_message(
+            chat_id=GROUP_CHAT_ID,
+            text=(
+                f"📸 Завершено фотографом\n\n"
+                f"🆔 ID: {event_id}\n"
+                f"👤 @{username}\n"
+                f"🔗 {link}"
+            )
         )
-    )
     except Exception as e:
         print("GROUP SEND ERROR:", e, flush=True)
 
